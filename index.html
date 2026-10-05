@@ -1,0 +1,1556 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ระบบแจ้งคะแนนนิสิต · คณะวิทยาศาสตร์การกีฬา</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+/* ═══════════════════════════════════════════
+   DESIGN TOKENS — Gold theme (BUU Sports)
+═══════════════════════════════════════════ */
+:root {
+  --gold:#C4912A; --gold-light:#E5B84A; --gold-dark:#9A7020;
+  --gold-pale:#FBF3DC; --gold-bg:#FFF8E8;
+  --navy:#1A2840; --navy-mid:#243650; --navy-light:#2E4666;
+  --bg:#FFFDF5; --surface:#FFFFFF; --surf2:#FAF7EF;
+  --border:#EDE4CC; --border-gold:#D4BA7A;
+  --tx:#1C1A0F; --tx-muted:#6B6040; --tx-light:#A09060;
+  --ok:#1A7A32; --ok-bg:#E6F5EC;
+  --warn:#B56000; --warn-bg:#FFF3DC;
+  --err:#BE2A1E; --err-bg:#FDECEA;
+  --info:#1553A0; --info-bg:#E5EFFD;
+  --r:12px; --r-sm:8px;
+  --sh:0 2px 12px rgba(196,145,42,.12);
+  --sh-md:0 6px 28px rgba(196,145,42,.18);
+  --f-body:'Sarabun','Helvetica Neue',sans-serif;
+  --f-data:'IBM Plex Sans Thai','Sarabun',monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --gold:#E5B84A; --gold-light:#F5CC70; --gold-dark:#C4912A; --gold-pale:#2A2210; --gold-bg:#1E1A08;
+    --navy:#0C1422; --navy-mid:#162030; --navy-light:#1E2E44;
+    --bg:#0F0E08; --surface:#1A1810; --surf2:#231F12; --border:#3A3218; --border-gold:#5A4A28;
+    --tx:#F0E8C8; --tx-muted:#A09060; --tx-light:#6B5C3A;
+    --ok:#4CAF50; --ok-bg:#0A2912; --warn:#FFC107; --warn-bg:#231900;
+    --err:#EF5350; --err-bg:#280B09; --info:#42A5F5; --info-bg:#08172D;
+    --sh:0 2px 12px rgba(0,0,0,.4); --sh-md:0 6px 28px rgba(0,0,0,.55);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --gold:#E5B84A; --gold-light:#F5CC70; --gold-dark:#C4912A; --gold-pale:#2A2210; --gold-bg:#1E1A08;
+  --navy:#0C1422; --navy-mid:#162030; --navy-light:#1E2E44;
+  --bg:#0F0E08; --surface:#1A1810; --surf2:#231F12; --border:#3A3218; --border-gold:#5A4A28;
+  --tx:#F0E8C8; --tx-muted:#A09060; --tx-light:#6B5C3A;
+  --ok:#4CAF50; --ok-bg:#0A2912; --warn:#FFC107; --warn-bg:#231900;
+  --err:#EF5350; --err-bg:#280B09; --info:#42A5F5; --info-bg:#08172D;
+  --sh:0 2px 12px rgba(0,0,0,.4); --sh-md:0 6px 28px rgba(0,0,0,.55);
+  color-scheme: dark;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--f-body);background:var(--bg);color:var(--tx);font-size:15px;line-height:1.6;min-height:100%}
+button{cursor:pointer;font-family:var(--f-body)}
+input,select,textarea{font-family:var(--f-body)}
+[hidden]{display:none!important}
+
+/* ══════ LOADING OVERLAY ══════ */
+#loadingOverlay{position:fixed;inset:0;background:var(--navy);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;z-index:9999;transition:opacity .4s}
+#loadingOverlay.fade{opacity:0;pointer-events:none}
+.spin{width:44px;height:44px;border:3px solid rgba(196,145,42,.25);
+  border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:18px}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loadingOverlay p{color:rgba(255,255,255,.6);font-size:14px}
+
+/* ══════ SETUP MODAL ══════ */
+#setupMover{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;
+  align-items:center;justify-content:center;z-index:8888;padding:20px}
+#setupMover.on{display:flex}
+.setup-modal{background:var(--surface);border-radius:18px;width:100%;max-width:520px;
+  box-shadow:0 24px 80px rgba(0,0,0,.4);animation:su .2s ease}
+.setup-head{background:var(--navy);padding:22px 26px 18px;border-radius:18px 18px 0 0;position:relative}
+.setup-head::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--gold),transparent)}
+.setup-head h2{color:#fff;font-size:18px;font-weight:800;margin-bottom:3px}
+.setup-head p{color:rgba(255,255,255,.55);font-size:13px}
+.setup-body{padding:22px 26px;display:flex;flex-direction:column;gap:14px}
+.setup-info{background:var(--gold-bg);border:1px solid var(--border-gold);border-radius:var(--r-sm);
+  padding:12px 14px;font-size:12.5px;color:var(--tx-muted);line-height:1.7}
+.setup-info strong{color:var(--gold-dark)}
+.setup-info code{font-family:var(--f-data);background:var(--surf2);padding:1px 5px;border-radius:3px;font-size:11.5px}
+.setup-foot{padding:8px 26px 22px;display:flex;gap:9px;justify-content:flex-end}
+.setup-err{color:var(--err);font-size:13px;display:none;margin-top:-6px}
+
+/* ══════ SUPABASE STATUS BADGE ══════ */
+#sbBadge{position:fixed;bottom:16px;left:16px;z-index:500;padding:5px 11px;border-radius:20px;
+  font-size:11px;font-weight:700;display:flex;align-items:center;gap:5px;
+  box-shadow:var(--sh);cursor:pointer;transition:opacity .2s;border:1px solid var(--border)}
+#sbBadge.ok{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
+#sbBadge.warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn)}
+#sbBadge .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+
+/* ══════════════ LOGIN / REGISTER ══════════════ */
+.lw{min-height:100vh;display:flex;align-items:center;justify-content:center;
+    padding:24px 16px;background:linear-gradient(140deg,#0C1422 0%,#1A2840 55%,#2E4666 100%)}
+.lcard{background:var(--surface);border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.35);
+       width:100%;max-width:430px;overflow:hidden}
+.lhead{background:var(--navy);padding:28px 32px 22px;text-align:center;position:relative}
+.lhead::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;
+              background:linear-gradient(90deg,transparent,var(--gold),transparent)}
+.llogo{width:60px;height:60px;background:linear-gradient(135deg,var(--gold),var(--gold-light));
+       border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;
+       font-size:20px;font-weight:800;color:var(--navy);letter-spacing:-1px;
+       box-shadow:0 4px 16px rgba(196,145,42,.4)}
+.luni{color:rgba(255,255,255,.6);font-size:11.5px;letter-spacing:.4px;margin-bottom:3px}
+.ltitle{color:#fff;font-size:18px;font-weight:700}
+.lbody{padding:24px 28px 28px}
+.rtabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;background:var(--surf2);
+       border-radius:8px;padding:4px;margin-bottom:22px;border:1px solid var(--border)}
+.rtab{padding:7px 5px;border:none;background:transparent;border-radius:6px;
+      font-size:13px;font-weight:600;color:var(--tx-muted);transition:all .15s;
+      display:flex;align-items:center;justify-content:center;gap:4px}
+.rtab.on{background:var(--gold);color:var(--navy);box-shadow:0 1px 6px rgba(196,145,42,.3)}
+.flabel{display:block;font-size:12px;font-weight:700;color:var(--tx-muted);
+        margin-bottom:5px;letter-spacing:.3px}
+.finput{width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:var(--r-sm);
+        background:var(--surface);color:var(--tx);font-size:15px;outline:none;transition:border-color .15s}
+.finput:focus{border-color:var(--gold)}
+.fg{margin-bottom:13px}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btnlogin{width:100%;padding:12px;background:linear-gradient(135deg,var(--gold-dark),var(--gold));
+          color:var(--navy);border:none;border-radius:var(--r-sm);font-size:15px;font-weight:800;
+          margin-top:4px;transition:opacity .15s;letter-spacing:.3px}
+.btnlogin:hover{opacity:.88}
+.lerr{color:var(--err);font-size:13px;margin-top:7px;display:none}
+.lok{color:var(--ok);font-size:13px;margin-top:7px;display:none}
+.lhint{margin-top:14px;padding:11px 13px;background:var(--gold-bg);
+       border-radius:var(--r-sm);border-left:3px solid var(--gold)}
+.lhint p{font-size:12px;color:var(--tx-muted);line-height:1.7}
+.reg-form{display:none}
+.reg-form.on{display:block}
+.login-form{display:block}
+.login-form.hide{display:none}
+
+/* ══════════════ APP SHELL ══════════════ */
+.app{display:none;min-height:100vh;flex-direction:column}
+.app.on{display:flex}
+.anav{background:var(--navy);position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.25)}
+.anav::after{content:'';display:block;height:2px;
+             background:linear-gradient(90deg,transparent 0%,var(--gold) 30%,var(--gold-light) 50%,var(--gold) 70%,transparent 100%)}
+.anavinner{display:flex;align-items:center;gap:12px;padding:0 20px;height:54px;max-width:1180px;margin:0 auto}
+.navbrand{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+.navlogo{width:34px;height:34px;background:linear-gradient(135deg,var(--gold),var(--gold-light));
+         border-radius:7px;display:flex;align-items:center;justify-content:center;
+         font-weight:800;font-size:12px;color:var(--navy);flex-shrink:0}
+.navtitle{color:#fff;font-size:14px;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.navsubttl{color:rgba(255,255,255,.5);font-size:10.5px}
+.navuser{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.navname{color:rgba(255,255,255,.88);font-size:13px;font-weight:600;text-align:right;line-height:1.2}
+.navrole{color:var(--gold-light);font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.btnout{padding:6px 13px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);
+        border-radius:6px;color:#fff;font-size:12px;font-weight:600;transition:background .15s}
+.btnout:hover{background:rgba(255,255,255,.18)}
+
+/* ══════════════ TEACHER SUB-NAV ══════════════ */
+.tnav{background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:56px;z-index:90}
+.tnavinner{display:flex;gap:0;max-width:1180px;margin:0 auto;padding:0 20px}
+.tnav-tab{padding:12px 18px;background:transparent;border:none;border-bottom:2.5px solid transparent;
+          font-size:13.5px;font-weight:700;color:var(--tx-muted);transition:all .18s;
+          display:flex;align-items:center;gap:6px}
+.tnav-tab.on{color:var(--gold-dark);border-bottom-color:var(--gold)}
+.tnav-tab:hover:not(.on){color:var(--tx);background:var(--surf2)}
+
+/* ══════════════ MAIN ══════════════ */
+.amain{flex:1;max-width:1180px;margin:0 auto;width:100%;padding:22px 20px}
+.ph h1{font-size:21px;font-weight:800;color:var(--tx)}
+.ph p{color:var(--tx-muted);font-size:13px;margin-top:2px}
+.ph{margin-bottom:20px}
+.slabel{font-size:11px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;
+        color:var(--tx-light);margin-bottom:11px}
+
+/* ══════════════ COURSE GRID ══════════════ */
+.cgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px;margin-bottom:24px}
+.ccard{background:var(--surface);border-radius:var(--r);padding:16px 18px;
+       border:1.5px solid var(--border);transition:all .18s;position:relative;overflow:hidden;cursor:pointer}
+.ccard::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;
+               background:var(--gold);opacity:0;transition:opacity .18s;border-radius:4px 0 0 4px}
+.ccard:hover,.ccard.on{border-color:var(--border-gold);box-shadow:var(--sh)}
+.ccard.on::before{opacity:1}
+.ccode{font-size:10.5px;font-weight:800;color:var(--tx-light);letter-spacing:.5px;margin-bottom:3px;font-family:var(--f-data)}
+.cname{font-size:13.5px;font-weight:700;color:var(--tx);line-height:1.4;margin-bottom:9px}
+.cmeta{display:flex;gap:7px;flex-wrap:wrap}
+.chip{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;
+      background:var(--surf2);color:var(--tx-muted);border:1px solid var(--border)}
+.chip.gold{background:var(--gold-bg);color:var(--gold-dark);border:1px solid var(--border-gold)}
+.chip.ok{background:var(--ok-bg);color:var(--ok);border:none}
+.chip.warn{background:var(--warn-bg);color:var(--warn);border:none}
+.chip.info{background:var(--info-bg);color:var(--info);border:none}
+
+/* ══════════════ SCORE PANEL ══════════════ */
+.spanel{display:none;animation:fadeUp .2s ease}
+.spanel.on{display:block}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.cinfo-bar{background:var(--surface);border-radius:var(--r);padding:15px 20px;
+           margin-bottom:16px;border:1px solid var(--border);display:flex;align-items:center;gap:13px}
+.cinfo-icon{width:44px;height:44px;background:linear-gradient(135deg,var(--navy),var(--navy-light));
+            border-radius:10px;display:flex;align-items:center;justify-content:center;
+            font-size:20px;flex-shrink:0;box-shadow:var(--sh)}
+.cinfo-text{flex:1;min-width:0}
+.cinfo-text h2{font-size:15px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cinfo-text p{font-size:11.5px;color:var(--tx-muted);font-family:var(--f-data)}
+.ssummary{display:grid;grid-template-columns:auto 1fr;gap:14px;margin-bottom:16px}
+.stotal{background:linear-gradient(135deg,var(--navy),var(--navy-light));border-radius:var(--r);
+        padding:18px 22px;text-align:center;min-width:120px;border:1px solid var(--navy-mid)}
+.stlabel{color:rgba(255,255,255,.6);font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;margin-bottom:5px}
+.stnum{font-size:44px;font-weight:800;color:#fff;font-family:var(--f-data);line-height:1}
+.stmax{color:rgba(255,255,255,.45);font-size:13px;font-family:var(--f-data)}
+.stgrade{display:inline-block;background:linear-gradient(135deg,var(--gold-dark),var(--gold));
+         color:var(--navy);font-size:18px;font-weight:800;padding:3px 18px;
+         border-radius:20px;margin-top:9px;box-shadow:0 2px 8px rgba(196,145,42,.4)}
+.sdetail{background:var(--surface);border-radius:var(--r);border:1px solid var(--border);
+         padding:16px 18px;display:flex;flex-direction:column;justify-content:center;gap:10px}
+.sdr{display:flex;justify-content:space-between;align-items:center;font-size:13px}
+.sdl{color:var(--tx-muted)}.sdv{font-weight:700;font-family:var(--f-data);color:var(--tx)}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.badge.ok{background:var(--ok-bg);color:var(--ok)}
+.badge.err{background:var(--err-bg);color:var(--err)}
+.sbgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:12px;margin-bottom:16px}
+.sbc{background:var(--surface);border-radius:var(--r);padding:16px 18px;border:1px solid var(--border)}
+.bhead{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:11px}
+.blabel{font-size:13px;font-weight:700;color:var(--tx)}
+.bsub{font-size:11px;color:var(--tx-muted);margin-top:1px}
+.bval{font-size:24px;font-weight:800;font-family:var(--f-data);line-height:1;text-align:right;color:var(--gold-dark)}
+.bmax{font-size:11px;color:var(--tx-muted);font-family:var(--f-data);text-align:right}
+.btrack{height:7px;background:var(--surf2);border-radius:4px;overflow:hidden;border:1px solid var(--border)}
+.bfill{height:100%;border-radius:4px;width:0%;transition:width .7s cubic-bezier(.4,0,.2,1)}
+.bfill.col{background:linear-gradient(90deg,var(--navy),var(--navy-light))}
+.bfill.mid{background:linear-gradient(90deg,#6B22B0,#9745E0)}
+.bfill.fin{background:linear-gradient(90deg,var(--gold-dark),var(--gold))}
+.bfill.aff{background:linear-gradient(90deg,#145E27,#22A03D)}
+.bpct{font-size:11px;color:var(--tx-light);margin-top:5px;font-family:var(--f-data)}
+
+/* ══════════════ COURSE ENROLL ══════════════ */
+.btn-enroll{display:flex;align-items:center;gap:8px;padding:10px 16px;
+            background:var(--gold-bg);border:1.5px dashed var(--border-gold);
+            border-radius:var(--r);font-size:14px;font-weight:700;color:var(--gold-dark);
+            width:100%;justify-content:center;transition:all .18s;margin-bottom:16px}
+.btn-enroll:hover{background:var(--gold-pale);border-style:solid}
+
+/* ══════════════ TEACHER PANELS ══════════════ */
+.tpanel{display:none}
+.tpanel.on{display:block;animation:fadeUp .2s ease}
+.twrap{background:var(--surface);border-radius:var(--r);border:1px solid var(--border);overflow:hidden;margin-top:12px}
+.thead-row{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border)}
+.thead-row h3{font-size:15px;font-weight:700;color:var(--tx)}
+.thead-row p{font-size:12px;color:var(--tx-muted)}
+table{width:100%;border-collapse:collapse}
+thead th{padding:9px 13px;text-align:left;font-size:10.5px;font-weight:800;letter-spacing:.5px;
+         text-transform:uppercase;color:var(--tx-muted);background:var(--surf2);border-bottom:1px solid var(--border)}
+thead th.r{text-align:center}
+tbody td{padding:10px 13px;font-size:13px;color:var(--tx);border-bottom:1px solid var(--border);vertical-align:middle}
+tbody td.r{text-align:center;font-family:var(--f-data);font-weight:700}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:var(--surf2)}
+.sid{font-family:var(--f-data);font-size:11.5px;color:var(--tx-muted)}
+.btnedit{padding:4px 11px;background:transparent;border:1px solid var(--border);border-radius:5px;font-size:12px;font-weight:600;color:var(--tx-muted);transition:all .15s}
+.btnedit:hover{background:var(--gold);border-color:var(--gold);color:var(--navy)}
+.btndel{padding:4px 11px;background:transparent;border:1px solid var(--border);border-radius:5px;font-size:12px;font-weight:600;color:var(--tx-muted);transition:all .15s}
+.btndel:hover{background:var(--err-bg);border-color:var(--err);color:var(--err)}
+.srow{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:11px;margin-bottom:18px}
+.sc{background:var(--surface);border-radius:var(--r-sm);padding:13px 15px;border:1px solid var(--border)}
+.scv{font-size:28px;font-weight:800;font-family:var(--f-data);color:var(--gold-dark);line-height:1;font-variant-numeric:tabular-nums}
+.scl{font-size:11px;color:var(--tx-muted);margin-top:3px}
+.accard{background:var(--surface);border-radius:var(--r);border:1px solid var(--border);margin-bottom:18px;overflow:hidden}
+.actog{width:100%;padding:13px 17px;background:transparent;border:none;
+       display:flex;align-items:center;gap:9px;font-size:14px;font-weight:700;
+       color:var(--gold-dark);text-align:left;transition:background .15s}
+.actog:hover{background:var(--gold-bg)}
+.acbody{padding:0 18px 18px;display:none;flex-direction:column;gap:12px}
+.acbody.on{display:flex}
+.ir{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.searchbar{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.searchbar input{flex:1;padding:9px 13px;border:1.5px solid var(--border);border-radius:var(--r-sm);
+                 font-size:14px;background:var(--surface);color:var(--tx);outline:none;transition:border-color .15s}
+.searchbar input:focus{border-color:var(--gold)}
+.course-chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip-sm{padding:1px 7px;border-radius:12px;font-size:10.5px;font-weight:600;
+         background:var(--gold-bg);color:var(--gold-dark);border:1px solid var(--border-gold)}
+
+/* ══════════════ EXCEL PANEL ══════════════ */
+.xpanel-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px}
+.xcard{background:var(--surface);border-radius:var(--r);border:1px solid var(--border);padding:22px 24px}
+.xcard h3{font-size:15px;font-weight:800;color:var(--tx);margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.xcard p{font-size:13px;color:var(--tx-muted);margin-bottom:16px;line-height:1.6}
+.xsteps{list-style:none;margin-bottom:18px}
+.xsteps li{font-size:12.5px;color:var(--tx-muted);padding:3px 0;display:flex;align-items:flex-start;gap:7px}
+.xsteps li::before{content:'';display:inline-block;width:18px;height:18px;background:var(--gold-bg);
+                   border-radius:50%;border:1.5px solid var(--gold);flex-shrink:0;
+                   font-size:10px;font-weight:800;color:var(--gold-dark);text-align:center;line-height:17px}
+.xstep-1::before{content:'1'}.xstep-2::before{content:'2'}.xstep-3::before{content:'3'}
+.xcourse-sel{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);
+             background:var(--surface);color:var(--tx);font-size:14px;outline:none;margin-bottom:12px;transition:border-color .15s}
+.xcourse-sel:focus{border-color:var(--gold)}
+.dropzone{border:2px dashed var(--border-gold);border-radius:var(--r);padding:30px 20px;
+          text-align:center;cursor:pointer;transition:all .18s;background:var(--gold-bg)}
+.dropzone:hover,.dropzone.over{border-color:var(--gold);background:var(--gold-pale)}
+.dropzone-icon{font-size:32px;margin-bottom:8px}
+.dropzone p{font-size:13px;color:var(--tx-muted)}
+.dropzone small{font-size:11px;color:var(--tx-light)}
+.import-input{display:none}
+.import-result{margin-top:14px;padding:11px 14px;border-radius:var(--r-sm);font-size:13px;display:none}
+.import-result.ok{background:var(--ok-bg);color:var(--ok)}
+.import-result.err{background:var(--err-bg);color:var(--err)}
+
+/* ══════════════ MODAL ══════════════ */
+.mover{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;
+       align-items:center;justify-content:center;z-index:999;padding:20px}
+.mover.on{display:flex}
+.modal{background:var(--surface);border-radius:16px;width:100%;max-width:460px;
+       box-shadow:0 24px 72px rgba(0,0,0,.35);animation:su .2s ease}
+.modal.wide{max-width:560px}
+@keyframes su{from{transform:translateY(14px);opacity:0}to{transform:translateY(0);opacity:1}}
+.mhead{padding:18px 22px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start}
+.mhead h3{font-size:16px;font-weight:800}
+.mhead p{font-size:12px;color:var(--tx-muted);margin-top:2px}
+.mcls{width:27px;height:27px;border:none;background:var(--surf2);border-radius:50%;
+      font-size:15px;color:var(--tx-muted);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s}
+.mcls:hover{background:var(--border)}
+.mbody{padding:18px 22px;display:flex;flex-direction:column;gap:13px}
+.sig{position:relative}
+.sig .finput{padding-right:48px;font-family:var(--f-data);font-size:16px;font-weight:700}
+.shint{position:absolute;right:10px;top:50%;transform:translateY(-50%);
+       font-size:11px;color:var(--tx-light);font-family:var(--f-data);pointer-events:none}
+.mfoot{padding:10px 22px 18px;display:flex;gap:9px;justify-content:flex-end}
+.clist{display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto;padding:2px 0}
+.clist-item{display:flex;align-items:center;gap:10px;padding:10px 12px;
+            border-radius:var(--r-sm);border:1px solid var(--border);cursor:pointer;transition:all .15s}
+.clist-item:hover{border-color:var(--border-gold);background:var(--gold-bg)}
+.clist-item.on{border-color:var(--gold);background:var(--gold-bg)}
+.clist-item input[type=checkbox]{width:16px;height:16px;accent-color:var(--gold-dark)}
+.clist-name{flex:1;font-size:13px;font-weight:600;color:var(--tx)}
+.clist-code{font-family:var(--f-data);font-size:11px;color:var(--tx-muted)}
+.btn-pri{padding:9px 20px;background:linear-gradient(135deg,var(--gold-dark),var(--gold));
+         border:none;border-radius:6px;font-size:13px;font-weight:800;color:var(--navy);transition:opacity .15s}
+.btn-pri:hover{opacity:.85}
+.btn-sec{padding:9px 18px;background:transparent;border:1px solid var(--border);
+         border-radius:6px;font-size:13px;color:var(--tx);transition:background .15s}
+.btn-sec:hover{background:var(--surf2)}
+.btn-add{padding:8px 15px;background:linear-gradient(135deg,var(--gold-dark),var(--gold));
+         color:var(--navy);border:none;border-radius:6px;font-size:13px;font-weight:800;
+         display:flex;align-items:center;gap:5px;transition:opacity .15s}
+.btn-add:hover{opacity:.85}
+.btn-ghost{padding:8px 14px;background:var(--gold-bg);border:1px solid var(--border-gold);
+           border-radius:6px;font-size:13px;font-weight:700;color:var(--gold-dark);transition:all .15s}
+.btn-ghost:hover{background:var(--gold-pale)}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--navy);color:#fff;
+       padding:11px 18px;border-radius:10px;font-size:13.5px;font-weight:600;
+       box-shadow:var(--sh-md);transform:translateY(80px);opacity:0;
+       transition:all .25s cubic-bezier(.4,0,.2,1);z-index:2000;max-width:320px;
+       border-left:3px solid var(--gold)}
+.toast.on{transform:translateY(0);opacity:1}
+.empty{text-align:center;padding:48px 20px;color:var(--tx-muted)}
+.empty-icon{font-size:38px;margin-bottom:10px;opacity:.4}
+.empty h3{font-size:15px;font-weight:700;color:var(--tx);margin-bottom:3px}
+.empty p{font-size:13px}
+
+@media(max-width:680px){
+  .ssummary{grid-template-columns:1fr}
+  .stotal{display:flex;align-items:center;gap:16px;text-align:left;min-width:auto}
+  .stgrade{margin-top:0}
+  .sbgrid{grid-template-columns:1fr}
+  .ir{grid-template-columns:1fr}
+  .cgrid{grid-template-columns:1fr}
+  .srow{grid-template-columns:repeat(3,1fr)}
+  .amain{padding:14px 13px}
+  .lbody{padding:18px 18px 24px}
+  .xpanel-grid{grid-template-columns:1fr}
+  .frow{grid-template-columns:1fr}
+  .tnavinner{gap:0;overflow-x:auto}
+  .tnav-tab{font-size:12px;padding:11px 12px;white-space:nowrap}
+}
+</style>
+</head>
+<body>
+
+<!-- ══════ LOADING OVERLAY ══════ -->
+<div id="loadingOverlay">
+  <div class="spin"></div>
+  <p id="loadingMsg">กำลังโหลดข้อมูล…</p>
+</div>
+
+<!-- ══════ SUPABASE SETUP MODAL ══════ -->
+<div id="setupMover">
+  <div class="setup-modal">
+    <div class="setup-head">
+      <h2>⚙️ ตั้งค่า Supabase</h2>
+      <p>เชื่อมต่อฐานข้อมูลเพื่อซิงค์ข้อมูลข้ามอุปกรณ์</p>
+    </div>
+    <div class="setup-body">
+      <div class="setup-info">
+        <strong>วิธีหาค่าที่ต้องกรอก:</strong><br>
+        1. เปิด <code>supabase.com</code> → เลือก Project<br>
+        2. ไปที่ <code>Settings → API</code><br>
+        3. คัดลอก <code>Project URL</code> และ <code>anon key</code>
+      </div>
+      <div class="fg" style="margin:0">
+        <label class="flabel">Supabase Project URL</label>
+        <input class="finput" id="setupUrl" type="url" placeholder="https://xxxx.supabase.co">
+      </div>
+      <div class="fg" style="margin:0">
+        <label class="flabel">Supabase Anon Key</label>
+        <input class="finput" id="setupKey" type="password" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+      </div>
+      <div class="setup-err" id="setupErr"></div>
+      <div class="setup-info" style="background:var(--info-bg);border-color:var(--info);color:var(--info)">
+        💡 ถ้าไม่มี Supabase ยังสามารถกด <strong>"ใช้แบบออฟไลน์"</strong> เพื่อเก็บข้อมูลบน Browser นี้ได้
+      </div>
+    </div>
+    <div class="setup-foot">
+      <button class="btn-sec" onclick="useOffline()">ใช้แบบออฟไลน์</button>
+      <button class="btn-pri" onclick="connectSupabase()">เชื่อมต่อ Supabase</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ SUPABASE STATUS BADGE ══════ -->
+<div id="sbBadge" onclick="openSetup()" title="คลิกเพื่อเปลี่ยนการเชื่อมต่อ" hidden>
+  <div class="dot"></div>
+  <span id="sbBadgeText">—</span>
+</div>
+
+<!-- ══════════ LOGIN / REGISTER ══════════ -->
+<div class="lw" id="loginView" style="display:none">
+  <div class="lcard">
+    <div class="lhead">
+      <div class="llogo">BU</div>
+      <div class="luni">มหาวิทยาลัยบูรพา · คณะวิทยาศาสตร์การกีฬา</div>
+      <div class="ltitle">ระบบแจ้งคะแนนนิสิต</div>
+    </div>
+    <div class="lbody">
+      <div class="rtabs">
+        <button class="rtab on" onclick="setRole('student')" id="tabS">🎓 นิสิต</button>
+        <button class="rtab"    onclick="setRole('teacher')" id="tabT">👨‍🏫 อาจารย์</button>
+        <button class="rtab"    onclick="setRole('register')" id="tabR">✏️ สมัคร</button>
+      </div>
+      <div class="login-form" id="loginForm">
+        <div class="fg">
+          <label class="flabel" id="idLabel">รหัสนิสิต</label>
+          <input class="finput" id="lid" type="text" placeholder="กรอกรหัสนิสิต" autocomplete="username">
+        </div>
+        <div class="fg">
+          <label class="flabel">รหัสผ่าน</label>
+          <input class="finput" id="lpass" type="password" placeholder="กรอกรหัสผ่าน" autocomplete="current-password">
+        </div>
+        <div class="lerr" id="lerr">รหัสผ่านหรือรหัสนิสิต/อาจารย์ไม่ถูกต้อง</div>
+        <button class="btnlogin" onclick="doLogin()">เข้าสู่ระบบ</button>
+        <div class="lhint">
+          <p id="demoHint"><strong>ทดสอบ:</strong> รหัสนิสิต: 67100076 · รหัสผ่าน: 1234</p>
+        </div>
+      </div>
+      <div class="reg-form" id="regForm">
+        <div class="frow">
+          <div class="fg">
+            <label class="flabel">คำนำหน้า</label>
+            <select class="finput" id="rPrefix">
+              <option value="นาย">นาย</option>
+              <option value="นางสาว" selected>นางสาว</option>
+              <option value="นาง">นาง</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label class="flabel">รหัสนิสิต</label>
+            <input class="finput" id="rUid" type="text" placeholder="เช่น 67100999">
+          </div>
+        </div>
+        <div class="fg">
+          <label class="flabel">ชื่อ-นามสกุล</label>
+          <input class="finput" id="rName" type="text" placeholder="ชื่อ นามสกุล">
+        </div>
+        <div class="frow">
+          <div class="fg">
+            <label class="flabel">รหัสผ่าน</label>
+            <input class="finput" id="rPw" type="password" placeholder="ตั้งรหัสผ่าน">
+          </div>
+          <div class="fg">
+            <label class="flabel">ยืนยันรหัสผ่าน</label>
+            <input class="finput" id="rPw2" type="password" placeholder="ยืนยัน">
+          </div>
+        </div>
+        <div class="lerr" id="rerr"></div>
+        <div class="lok" id="rok"></div>
+        <button class="btnlogin" onclick="doRegister()">สมัครสมาชิก</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ STUDENT APP ══════════ -->
+<div class="app" id="appS">
+  <nav class="anav">
+    <div class="anavinner">
+      <div class="navbrand">
+        <div class="navlogo">BU</div>
+        <div>
+          <div class="navtitle">ระบบแจ้งคะแนนนิสิต</div>
+          <div class="navsubttl">คณะวิทยาศาสตร์การกีฬา มหาวิทยาลัยบูรพา</div>
+        </div>
+      </div>
+      <div class="navuser">
+        <div class="navname"><div id="sName">—</div><div class="navrole">นิสิต</div></div>
+        <button class="btnout" onclick="logout()">ออก</button>
+      </div>
+    </div>
+  </nav>
+  <div class="amain">
+    <div class="ph"><h1>คะแนนของฉัน</h1><p>เลือกรายวิชาเพื่อดูคะแนนและเกรด</p></div>
+    <button class="btn-enroll" onclick="openEnrollModal()">＋ เพิ่มรายวิชาที่เรียน</button>
+    <div class="slabel">รายวิชาที่ลงทะเบียน</div>
+    <div class="cgrid" id="sCgrid"></div>
+    <div class="spanel" id="spanel"></div>
+  </div>
+</div>
+
+<!-- ══════════ TEACHER APP ══════════ -->
+<div class="app" id="appT">
+  <nav class="anav">
+    <div class="anavinner">
+      <div class="navbrand">
+        <div class="navlogo">BU</div>
+        <div>
+          <div class="navtitle">ระบบแจ้งคะแนนนิสิต</div>
+          <div class="navsubttl">คณะวิทยาศาสตร์การกีฬา มหาวิทยาลัยบูรพา</div>
+        </div>
+      </div>
+      <div class="navuser">
+        <div class="navname"><div id="tName">—</div><div class="navrole">อาจารย์</div></div>
+        <button class="btnout" onclick="logout()">ออก</button>
+      </div>
+    </div>
+  </nav>
+  <div class="tnav">
+    <div class="tnavinner">
+      <button class="tnav-tab on" onclick="switchTTab('courses')" id="tt-courses">📚 รายวิชา</button>
+      <button class="tnav-tab" onclick="switchTTab('members')" id="tt-members">👥 จัดการสมาชิก</button>
+      <button class="tnav-tab" onclick="switchTTab('excel')" id="tt-excel">📊 นำเข้า / ส่งออก</button>
+    </div>
+  </div>
+  <div class="amain tpanel on" id="tpanel-courses">
+    <div class="ph"><h1>จัดการรายวิชาและคะแนน</h1><p>เพิ่มรายวิชา และบันทึกคะแนนให้นิสิต</p></div>
+    <div class="accard">
+      <button class="actog" onclick="togAC()">＋ เพิ่มรายวิชาใหม่</button>
+      <div class="acbody" id="acbody">
+        <div class="ir">
+          <div class="fg"><label class="flabel">รหัสวิชา</label><input class="finput" id="nc_code" placeholder="เช่น 85336264"></div>
+          <div class="fg"><label class="flabel">หน่วยกิต</label><input class="finput" id="nc_cred" placeholder="เช่น 3(2-2-5)"></div>
+        </div>
+        <div class="fg"><label class="flabel">ชื่อรายวิชา (ภาษาไทย)</label><input class="finput" id="nc_name" placeholder="ชื่อวิชาภาษาไทย"></div>
+        <div class="fg"><label class="flabel">ชื่อรายวิชา (English)</label><input class="finput" id="nc_nameE" placeholder="English name (optional)"></div>
+        <div class="ir">
+          <div class="fg"><label class="flabel">กลุ่มเรียน</label><input class="finput" id="nc_grp" placeholder="เช่น 3"></div>
+          <div class="fg"><label class="flabel">ปีการศึกษา</label><input class="finput" id="nc_yr" placeholder="เช่น 2567"></div>
+        </div>
+        <div style="display:flex;gap:9px;justify-content:flex-end">
+          <button class="btn-sec" onclick="togAC()">ยกเลิก</button>
+          <button class="btn-pri" onclick="addCourse()">บันทึกรายวิชา</button>
+        </div>
+      </div>
+    </div>
+    <div class="slabel">รายวิชาทั้งหมด</div>
+    <div class="cgrid" id="tCgrid"></div>
+    <div id="tPanel" hidden></div>
+  </div>
+  <div class="amain tpanel" id="tpanel-members">
+    <div class="ph"><h1>จัดการสมาชิก</h1><p>ดูและจัดการบัญชีนิสิตทั้งหมดในระบบ</p></div>
+    <div class="searchbar">
+      <input type="text" id="memberSearch" placeholder="🔍 ค้นหาชื่อหรือรหัสนิสิต…" oninput="renderMembers()">
+      <div style="color:var(--tx-muted);font-size:13px;white-space:nowrap" id="memberCount"></div>
+    </div>
+    <div class="twrap">
+      <table>
+        <thead><tr>
+          <th>รหัสนิสิต</th><th>ชื่อ-นามสกุล</th><th>รายวิชาที่ลงทะเบียน</th><th class="r">จัดการ</th>
+        </tr></thead>
+        <tbody id="memberTable"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="amain tpanel" id="tpanel-excel">
+    <div class="ph"><h1>นำเข้า / ส่งออก Excel</h1><p>ส่งออก Template และนำเข้าคะแนนจากไฟล์ Excel</p></div>
+    <div class="xpanel-grid">
+      <div class="xcard">
+        <h3>📤 ส่งออก Template</h3>
+        <p>เลือกรายวิชาเพื่อสร้างไฟล์ Excel Template สำหรับกรอกคะแนน จากนั้นกรอกคะแนนและนำเข้ากลับเข้าระบบ</p>
+        <ul class="xsteps">
+          <li class="xstep-1">เลือกรายวิชาที่ต้องการส่งออก</li>
+          <li class="xstep-2">กด "ส่งออก Template" เพื่อดาวน์โหลด</li>
+          <li class="xstep-3">กรอกคะแนนในไฟล์ แล้วนำเข้ากลับ</li>
+        </ul>
+        <select class="xcourse-sel" id="exportCourse"></select>
+        <button class="btn-pri" style="width:100%" onclick="exportExcel()">📥 ส่งออก Template (.xlsx)</button>
+        <div id="exportMsg" style="font-size:12px;color:var(--tx-muted);margin-top:10px;display:none"></div>
+      </div>
+      <div class="xcard">
+        <h3>📥 นำเข้าคะแนนจาก Excel</h3>
+        <p>อัปโหลดไฟล์ Excel ที่กรอกคะแนนแล้ว ระบบจะจับคู่นิสิตตามรหัสนิสิตและอัปเดตคะแนนอัตโนมัติ</p>
+        <ul class="xsteps">
+          <li class="xstep-1">คอลัมน์ A: รหัสนิสิต, B: ชื่อ</li>
+          <li class="xstep-2">C: คะแนนเก็บ (0-30), D: กลางภาค (0-30)</li>
+          <li class="xstep-3">E: ปลายภาค (0-30), F: จิตพิสัย (0-10)</li>
+        </ul>
+        <div class="dropzone" id="dropzone" onclick="document.getElementById('importFile').click()"
+             ondragover="event.preventDefault();this.classList.add('over')"
+             ondragleave="this.classList.remove('over')" ondrop="handleDrop(event)">
+          <div class="dropzone-icon">📂</div>
+          <p>คลิกหรือลากไฟล์ Excel มาวางที่นี่</p>
+          <small>.xlsx / .xls</small>
+        </div>
+        <input type="file" id="importFile" class="import-input" accept=".xlsx,.xls" onchange="importExcel(this)">
+        <div class="import-result" id="importResult"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SCORE MODAL -->
+<div class="mover" id="mover">
+  <div class="modal">
+    <div class="mhead">
+      <div><h3>บันทึกคะแนน</h3><p id="mSname">—</p></div>
+      <button class="mcls" onclick="closeM()">✕</button>
+    </div>
+    <div class="mbody">
+      <div><label class="flabel">คะแนนเก็บ <span style="color:var(--tx-light);font-weight:400">(เต็ม 30)</span></label>
+        <div class="sig"><input class="finput" id="mCol" type="number" min="0" max="30" placeholder="0"><span class="shint">/ 30</span></div></div>
+      <div><label class="flabel">คะแนนกลางภาค <span style="color:var(--tx-light);font-weight:400">(เต็ม 30)</span></label>
+        <div class="sig"><input class="finput" id="mMid" type="number" min="0" max="30" placeholder="0"><span class="shint">/ 30</span></div></div>
+      <div><label class="flabel">คะแนนปลายภาค <span style="color:var(--tx-light);font-weight:400">(เต็ม 30)</span></label>
+        <div class="sig"><input class="finput" id="mFin" type="number" min="0" max="30" placeholder="0"><span class="shint">/ 30</span></div></div>
+      <div><label class="flabel">คะแนนจิตพิสัย <span style="color:var(--tx-light);font-weight:400">(เต็ม 10)</span></label>
+        <div class="sig"><input class="finput" id="mAff" type="number" min="0" max="10" placeholder="0"><span class="shint">/ 10</span></div></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn-sec" onclick="closeM()">ยกเลิก</button>
+      <button class="btn-pri" onclick="saveScores()">บันทึกคะแนน</button>
+    </div>
+  </div>
+</div>
+
+<!-- ENROLL MODAL -->
+<div class="mover" id="enrollMover">
+  <div class="modal wide">
+    <div class="mhead">
+      <div><h3>เพิ่มรายวิชาที่เรียน</h3><p>เลือกรายวิชาที่ต้องการลงทะเบียน</p></div>
+      <button class="mcls" onclick="closeEnrollModal()">✕</button>
+    </div>
+    <div class="mbody"><div class="clist" id="enrollList"></div></div>
+    <div class="mfoot">
+      <button class="btn-sec" onclick="closeEnrollModal()">ยกเลิก</button>
+      <button class="btn-pri" onclick="saveEnroll()">บันทึกการลงทะเบียน</button>
+    </div>
+  </div>
+</div>
+
+<!-- MANAGE COURSES MODAL -->
+<div class="mover" id="mgCoursesMover">
+  <div class="modal wide">
+    <div class="mhead">
+      <div><h3>จัดการรายวิชา</h3><p id="mgMemberName">—</p></div>
+      <button class="mcls" onclick="closeMgCourses()">✕</button>
+    </div>
+    <div class="mbody"><div class="clist" id="mgCoursesList"></div></div>
+    <div class="mfoot">
+      <button class="btn-sec" onclick="closeMgCourses()">ยกเลิก</button>
+      <button class="btn-pri" onclick="saveMgCourses()">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ══════════════════════════════════════
+   SEED DATA
+══════════════════════════════════════ */
+const COURSES0=[
+  {id:'c1',code:'85336264',name:'Sport Programs Production for Electronic Media',
+   nameT:'การผลิตรายการกีฬาเพื่อสื่ออิเล็กทรอนิกส์',credits:'3(2-2-5)',group:3,year:2567,tid:'t1'},
+  {id:'c2',code:'85331101',name:'Introduction to Sports Communication',
+   nameT:'การสื่อสารกีฬาเบื้องต้น',credits:'3(3-0-6)',group:1,year:2567,tid:'t1'},
+  {id:'c3',code:'85332205',name:'Digital Media for Sports',
+   nameT:'สื่อดิจิทัลเพื่อกีฬา',credits:'3(2-2-5)',group:2,year:2567,tid:'t1'},
+];
+const STUDS0=[
+  {id:'s1', uid:'67100076',name:'นางสาว ภัทรชุดา วิลัยวงษ์',  pw:'1234',cids:['c1','c2']},
+  {id:'s2', uid:'67100077',name:'นาย ณฐูนนท์ มั่นวาจา',        pw:'1234',cids:['c1','c2','c3']},
+  {id:'s3', uid:'67100079',name:'นางสาว ธันยา บุตรสาลี',       pw:'1234',cids:['c1','c3']},
+  {id:'s4', uid:'67100081',name:'นางสาว ประภาศิริ หล้าอ่อนสี', pw:'1234',cids:['c1','c2']},
+  {id:'s5', uid:'67100088',name:'นางสาว สุกัญญา สีทาภักดี',    pw:'1234',cids:['c1']},
+  {id:'s6', uid:'67100113',name:'นางสาว ทอโหมทอง เกตุแก้ว',   pw:'1234',cids:['c1','c2','c3']},
+  {id:'s7', uid:'67100114',name:'นาย ธานันดา อิ่มพลี',         pw:'1234',cids:['c1','c3']},
+  {id:'s8', uid:'67100115',name:'นาย อำรงรัย คงนิมิตร',        pw:'1234',cids:['c1','c2']},
+  {id:'s9', uid:'67100121',name:'นาย ปัณณทัต กินใบ',           pw:'1234',cids:['c1']},
+  {id:'s10',uid:'67100122',name:'นางสาว พรทิพย์ คำใส',         pw:'1234',cids:['c1','c2']},
+  {id:'s11',uid:'67100123',name:'นางสาว พัชรกรณ์ คงแก้ว',      pw:'1234',cids:['c1','c3']},
+  {id:'s12',uid:'67100126',name:'นางสาว รสคุณณ์ พรมชาติ',      pw:'1234',cids:['c1']},
+  {id:'s13',uid:'67100177',name:'นาย กันตพงศ์ ศิริวรรณ',       pw:'1234',cids:['c1','c2','c3']},
+  {id:'s14',uid:'67100179',name:'นางสาว ชนาทิพย์ ประทุมเขต',   pw:'1234',cids:['c1','c2']},
+  {id:'s15',uid:'67100181',name:'นางสาว จิตาภร ทรงสุข',        pw:'1234',cids:['c1','c3']},
+  {id:'s16',uid:'67100182',name:'นางสาว ณภัทร ศรีมงคล',        pw:'1234',cids:['c1']},
+  {id:'s17',uid:'67100186',name:'นาย ธรรณธรณ์ กาบทอง',         pw:'1234',cids:['c1','c2']},
+  {id:'s18',uid:'67100188',name:'นางสาว นาถนรี สมุทรเสน',      pw:'1234',cids:['c1','c3']},
+  {id:'s19',uid:'67100189',name:'นางสาว ปวรวรรณ ยศยิ่งยง',     pw:'1234',cids:['c1','c2']},
+  {id:'s20',uid:'67100190',name:'นางสาว ปานชนก สอนสุภาพ',      pw:'1234',cids:['c1']},
+  {id:'s21',uid:'67100191',name:'นางสาว ปุณฑา ไวยกัญญา',       pw:'1234',cids:['c1','c2','c3']},
+  {id:'s22',uid:'67100192',name:'นางสาว พิมพ์มาดา เกษร',       pw:'1234',cids:['c1','c3']},
+  {id:'s23',uid:'67100193',name:'นางสาว เพ็ญพิชชา บุญตัน',     pw:'1234',cids:['c1','c2']},
+  {id:'s24',uid:'67100194',name:'นางสาว ภัทรธิดา อาทิตย์ทอง',  pw:'1234',cids:['c1']},
+  {id:'s25',uid:'67100197',name:'นางสาว ศิรดา ทองแย้ม',        pw:'1234',cids:['c1','c3']},
+  {id:'s26',uid:'67100201',name:'นางสาว อัญชิสา จารุวณิช',      pw:'1234',cids:['c1','c2']},
+];
+const TEACH0=[
+  {id:'t1',uid:'teacher01',name:'ดร.ศุภฤทธิ์ ภูมิศาสตร์',pw:'admin',cids:['c1','c2','c3']},
+];
+function rnd(a,b){return Math.floor(Math.random()*(b-a+1))+a}
+function seedScores(studs,courses){
+  const sc={};
+  studs.forEach(s=>s.cids.forEach(cid=>{
+    sc[`${s.id}_${cid}`]={col:rnd(18,28),mid:rnd(18,28),fin:rnd(16,28),aff:rnd(7,10)};
+  }));
+  return sc;
+}
+
+/* ══════════════════════════════════════
+   SUPABASE CONFIG
+══════════════════════════════════════ */
+const LS_URL='buuScore_sbUrl';
+const LS_KEY='buuScore_sbKey';
+const LS_OFFLINE='buuScore_offline';
+const LS_DATA='buuScore_v4';
+
+let SB=null;
+let useSupabase=false;
+
+async function fetchVercelConfig(){
+  // ดึง config จาก Vercel serverless function /api/config
+  // (มีเฉพาะตอน deploy บน Vercel; ถ้า fetch ไม่ได้ให้ return ว่าง)
+  try{
+    const r=await fetch('/api/config',{cache:'no-store'});
+    if(r.ok){const d=await r.json(); return{url:d.url||'',key:d.key||''};}
+  }catch(e){}
+  return{url:'',key:''};
+}
+
+async function getSBConfig(){
+  // 1) window.__SB_URL / __SB_KEY (inject ตรง ๆ ถ้าใช้ custom server)
+  const wUrl=(window.__SB_URL||'').trim();
+  const wKey=(window.__SB_KEY||'').trim();
+  if(wUrl&&wKey) return{url:wUrl,key:wKey};
+  // 2) ดึงจาก Vercel /api/config
+  const vc=await fetchVercelConfig();
+  if(vc.url&&vc.key) return vc;
+  // 3) localStorage (ผู้ใช้กรอกเองในหน้า setup)
+  return{
+    url:localStorage.getItem(LS_URL)||'',
+    key:localStorage.getItem(LS_KEY)||''
+  };
+}
+
+function initSB(url,key){
+  if(!url||!key) return false;
+  try{
+    SB=window.supabase.createClient(url,key);
+    useSupabase=true;
+    localStorage.setItem(LS_URL,url);
+    localStorage.setItem(LS_KEY,key);
+    return true;
+  }catch(e){return false;}
+}
+
+function updateBadge(){
+  const b=document.getElementById('sbBadge');
+  b.removeAttribute('hidden');
+  if(useSupabase){
+    b.className='ok';
+    document.getElementById('sbBadgeText').textContent='Supabase';
+  } else {
+    b.className='warn';
+    document.getElementById('sbBadgeText').textContent='ออฟไลน์';
+  }
+}
+
+/* ══════════════════════════════════════
+   STATE
+══════════════════════════════════════ */
+let S={courses:[],studs:[],teachers:[],scores:{},user:null,selC:null,editSid:null,editCid:null,mgSid:null};
+
+function nextId(arr,prefix){
+  const nums=arr.map(x=>parseInt((x.id||'').replace(prefix,''))||0);
+  return prefix+(Math.max(0,...nums)+1);
+}
+
+/* ══════════════════════════════════════
+   LOAD / SAVE  (Supabase ↔ localStorage)
+══════════════════════════════════════ */
+async function loadData(){
+  if(useSupabase){
+    try{
+      setLoading('กำลังโหลดข้อมูลจาก Supabase…');
+      const [tr,cr,sr,scr]=await Promise.all([
+        SB.from('score_teachers').select('*'),
+        SB.from('score_courses').select('*'),
+        SB.from('score_students').select('*'),
+        SB.from('score_scores').select('*'),
+      ]);
+      if(tr.error||cr.error||sr.error||scr.error) throw new Error('query error');
+      S.teachers=(tr.data||[]).map(t=>({id:t.id,uid:t.uid,name:t.name,pw:t.pw,cids:t.cids||[]}));
+      S.courses=(cr.data||[]).map(c=>({id:c.id,code:c.code,name:c.name,nameT:c.name_t||'',
+        credits:c.credits,group:c.grp,year:c.year,tid:c.tid}));
+      S.studs=(sr.data||[]).map(s=>({id:s.id,uid:s.uid,name:s.name,pw:s.pw,cids:s.cids||[]}));
+      S.scores={};
+      (scr.data||[]).forEach(r=>{S.scores[`${r.student_id}_${r.course_id}`]={col:r.col,mid:r.mid,fin:r.fin,aff:r.aff};});
+      if(!S.teachers.length) await seedDatabase();
+    }catch(e){
+      console.warn('Supabase load failed, falling back to localStorage',e);
+      useSupabase=false;
+      updateBadge();
+      loadLocalStorage();
+    }
+  } else {
+    loadLocalStorage();
+  }
+}
+
+function loadLocalStorage(){
+  try{
+    const d=JSON.parse(localStorage.getItem(LS_DATA)||'null');
+    if(d&&d.courses&&d.studs){
+      S.courses=d.courses; S.studs=d.studs; S.teachers=d.teachers||TEACH0; S.scores=d.scores;
+    } else {
+      S.courses=COURSES0; S.studs=STUDS0; S.teachers=TEACH0;
+      S.scores=seedScores(STUDS0,COURSES0);
+      saveLocalStorage();
+    }
+  }catch(e){
+    S.courses=COURSES0; S.studs=STUDS0; S.teachers=TEACH0; S.scores=seedScores(STUDS0,COURSES0);
+  }
+}
+
+function saveLocalStorage(){
+  try{localStorage.setItem(LS_DATA,JSON.stringify({courses:S.courses,studs:S.studs,teachers:S.teachers,scores:S.scores}));}catch(e){}
+}
+
+/* Optimistic: update S immediately, then async persist */
+function save(){
+  saveLocalStorage(); // always keep local backup
+  if(useSupabase){/* async writes happen in the calling function */}
+}
+
+/* ══════════════════════════════════════
+   SUPABASE SEED (first run on empty DB)
+══════════════════════════════════════ */
+async function seedDatabase(){
+  setLoading('กำลังสร้างข้อมูลเริ่มต้น…');
+  // Insert teachers
+  await SB.from('score_teachers').upsert(
+    TEACH0.map(t=>({id:t.id,uid:t.uid,name:t.name,pw:t.pw,cids:t.cids})),
+    {onConflict:'id'}
+  );
+  // Insert courses
+  await SB.from('score_courses').upsert(
+    COURSES0.map(c=>({id:c.id,code:c.code,name:c.name,name_t:c.nameT,
+      credits:c.credits,grp:c.group,year:c.year,tid:c.tid})),
+    {onConflict:'id'}
+  );
+  // Insert students
+  await SB.from('score_students').upsert(
+    STUDS0.map(s=>({id:s.id,uid:s.uid,name:s.name,pw:s.pw,cids:s.cids})),
+    {onConflict:'id'}
+  );
+  // Insert seed scores
+  const seedSc=seedScores(STUDS0,COURSES0);
+  const scoreRows=Object.entries(seedSc).map(([k,v])=>{
+    const[sid,cid]=k.split('_');
+    return{student_id:sid,course_id:cid,col:v.col,mid:v.mid,fin:v.fin,aff:v.aff};
+  });
+  await SB.from('score_scores').upsert(scoreRows,{onConflict:'student_id,course_id'});
+  // Reload
+  await loadData();
+}
+
+/* ══════════════════════════════════════
+   SUPABASE WRITE HELPERS
+══════════════════════════════════════ */
+async function sbUpsertStudent(st){
+  if(!useSupabase) return;
+  await SB.from('score_students').upsert({id:st.id,uid:st.uid,name:st.name,pw:st.pw,cids:st.cids},{onConflict:'id'});
+}
+async function sbDeleteStudent(id){
+  if(!useSupabase) return;
+  await SB.from('score_students').delete().eq('id',id);
+}
+async function sbUpsertCourse(c){
+  if(!useSupabase) return;
+  await SB.from('score_courses').upsert({id:c.id,code:c.code,name:c.name,name_t:c.nameT||'',
+    credits:c.credits,grp:c.group,year:c.year,tid:c.tid},{onConflict:'id'});
+}
+async function sbUpsertScore(sid,cid,sc){
+  if(!useSupabase) return;
+  await SB.from('score_scores').upsert({student_id:sid,course_id:cid,col:sc.col,mid:sc.mid,fin:sc.fin,aff:sc.aff},
+    {onConflict:'student_id,course_id'});
+}
+async function sbUpsertScoresBulk(rows){
+  if(!useSupabase) return;
+  await SB.from('score_scores').upsert(rows,{onConflict:'student_id,course_id'});
+}
+
+/* ══════════════════════════════════════
+   SETUP MODAL
+══════════════════════════════════════ */
+function openSetup(){document.getElementById('setupMover').classList.add('on');}
+function closeSetup(){document.getElementById('setupMover').classList.remove('on');}
+
+async function connectSupabase(){
+  const url=document.getElementById('setupUrl').value.trim();
+  const key=document.getElementById('setupKey').value.trim();
+  const err=document.getElementById('setupErr');
+  err.style.display='none';
+  if(!url||!key){err.textContent='กรุณากรอก URL และ Anon Key';err.style.display='block';return;}
+  if(!url.startsWith('https://')){err.textContent='URL ต้องขึ้นต้นด้วย https://';err.style.display='block';return;}
+  const ok=initSB(url,key);
+  if(!ok){err.textContent='เชื่อมต่อไม่ได้ — ตรวจสอบ URL และ Key';err.style.display='block';return;}
+  localStorage.removeItem(LS_OFFLINE);
+  closeSetup();
+  showLoading();
+  await loadData();
+  hideLoading();
+  updateBadge();
+  showToast('✅ เชื่อมต่อ Supabase สำเร็จ');
+  document.getElementById('loginView').style.display='flex';
+}
+
+function useOffline(){
+  useSupabase=false;
+  localStorage.setItem(LS_OFFLINE,'1');
+  closeSetup();
+  updateBadge();
+  showToast('📴 ใช้งานแบบออฟไลน์');
+}
+
+/* ══════════════════════════════════════
+   LOADING HELPERS
+══════════════════════════════════════ */
+function setLoading(msg){document.getElementById('loadingMsg').textContent=msg||'กำลังโหลด…';}
+function showLoading(){const o=document.getElementById('loadingOverlay');o.classList.remove('fade');o.style.display='flex';}
+function hideLoading(){
+  const o=document.getElementById('loadingOverlay');
+  o.classList.add('fade');
+  setTimeout(()=>{o.style.display='none';},400);
+}
+
+/* ══════════════════════════════════════
+   GRADE
+══════════════════════════════════════ */
+function grade(t){
+  if(t>=80)return'A';if(t>=75)return'B+';if(t>=70)return'B';
+  if(t>=65)return'C+';if(t>=60)return'C';if(t>=55)return'D+';
+  if(t>=50)return'D';return'F';
+}
+function gp(g){return{A:'4.0','B+':'3.5',B:'3.0','C+':'2.5',C:'2.0','D+':'1.5',D:'1.0',F:'0.0'}[g]||'0.0';}
+function gcol(g){
+  if(g==='A')return'var(--ok)';
+  if(g==='F')return'var(--err)';
+  if(g==='B+'||g==='B')return'var(--info)';
+  return'var(--warn)';
+}
+
+/* ══════════════════════════════════════
+   TOAST
+══════════════════════════════════════ */
+let _toastTimer=null;
+function showToast(msg,ms=2800){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('on');
+  clearTimeout(_toastTimer);
+  _toastTimer=setTimeout(()=>t.classList.remove('on'),ms);
+}
+
+/* ══════════════════════════════════════
+   AUTH
+══════════════════════════════════════ */
+let role='student';
+function setRole(r){
+  role=r;
+  document.getElementById('tabS').classList.toggle('on',r==='student');
+  document.getElementById('tabT').classList.toggle('on',r==='teacher');
+  document.getElementById('tabR').classList.toggle('on',r==='register');
+  document.getElementById('loginForm').classList.toggle('hide',r==='register');
+  document.getElementById('regForm').classList.toggle('on',r==='register');
+  if(r!=='register'){
+    document.getElementById('idLabel').textContent=r==='student'?'รหัสนิสิต':'รหัสอาจารย์';
+    document.getElementById('lid').placeholder=r==='student'?'กรอกรหัสนิสิต':'กรอกรหัสอาจารย์';
+    document.getElementById('demoHint').innerHTML=r==='student'
+      ?'<strong>ทดสอบ:</strong> รหัสนิสิต: 67100076 · รหัสผ่าน: 1234'
+      :'<strong>ทดสอบ:</strong> รหัสอาจารย์: teacher01 · รหัสผ่าน: admin';
+    document.getElementById('lerr').style.display='none';
+  } else {
+    ['rerr','rok'].forEach(id=>document.getElementById(id).style.display='none');
+  }
+}
+
+function doLogin(){
+  const uid=document.getElementById('lid').value.trim();
+  const pw=document.getElementById('lpass').value;
+  document.getElementById('lerr').style.display='none';
+  if(role==='student'){
+    const u=S.studs.find(s=>s.uid===uid&&s.pw===pw);
+    if(!u){document.getElementById('lerr').style.display='block';return;}
+    S.user=u; showStudent(u);
+  } else {
+    const u=S.teachers.find(t=>t.uid===uid&&t.pw===pw);
+    if(!u){document.getElementById('lerr').style.display='block';return;}
+    S.user=u; showTeacher(u);
+  }
+}
+
+async function doRegister(){
+  const prefix=document.getElementById('rPrefix').value;
+  const rawName=document.getElementById('rName').value.trim();
+  const uid=document.getElementById('rUid').value.trim();
+  const pw=document.getElementById('rPw').value;
+  const pw2=document.getElementById('rPw2').value;
+  const err=document.getElementById('rerr');
+  const ok=document.getElementById('rok');
+  err.style.display='none'; ok.style.display='none';
+  if(!uid||!rawName||!pw){err.textContent='กรุณากรอกข้อมูลให้ครบถ้วน';err.style.display='block';return;}
+  if(pw!==pw2){err.textContent='รหัสผ่านไม่ตรงกัน';err.style.display='block';return;}
+  if(pw.length<4){err.textContent='รหัสผ่านต้องมีอย่างน้อย 4 ตัวอักษร';err.style.display='block';return;}
+  if(S.studs.find(s=>s.uid===uid)||S.teachers.find(t=>t.uid===uid)){
+    err.textContent='รหัสนิสิตนี้มีในระบบแล้ว';err.style.display='block';return;
+  }
+  const fullName=prefix+' '+rawName;
+  const newS={id:nextId(S.studs,'s'),uid,name:fullName,pw,cids:[]};
+  S.studs.push(newS);
+  save();
+  sbUpsertStudent(newS).catch(()=>{});
+  ok.textContent='✅ สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบด้วยบัญชีใหม่';
+  ok.style.display='block';
+  ['rPrefix','rName','rUid','rPw','rPw2'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el.tagName==='SELECT') el.selectedIndex=0; else el.value='';
+  });
+  setTimeout(()=>setRole('student'),1800);
+}
+
+function logout(){
+  S.user=null; S.selC=null;
+  document.getElementById('loginView').style.display='flex';
+  document.getElementById('appS').classList.remove('on');
+  document.getElementById('appT').classList.remove('on');
+  document.getElementById('lid').value='';
+  document.getElementById('lpass').value='';
+  document.getElementById('lerr').style.display='none';
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){
+    const lv=document.getElementById('loginView');
+    if(lv.style.display!=='none'){
+      if(role==='register') doRegister(); else doLogin();
+    }
+  }
+});
+
+/* ══════════════════════════════════════
+   STUDENT VIEW
+══════════════════════════════════════ */
+function showStudent(u){
+  document.getElementById('loginView').style.display='none';
+  document.getElementById('appS').classList.add('on');
+  const parts=u.name.split(' ');
+  document.getElementById('sName').textContent=parts[parts.length-1]||u.name;
+  renderSCourses(u);
+}
+function renderSCourses(u){
+  const my=S.courses.filter(c=>(u.cids||[]).includes(c.id));
+  const g=document.getElementById('sCgrid');
+  if(!my.length){
+    g.innerHTML='<div class="empty"><div class="empty-icon">📚</div><h3>ยังไม่มีรายวิชา</h3><p>กดปุ่ม "เพิ่มรายวิชาที่เรียน" เพื่อลงทะเบียน</p></div>';
+    document.getElementById('spanel').innerHTML='';
+    document.getElementById('spanel').classList.remove('on');
+    return;
+  }
+  g.innerHTML=my.map(c=>`
+    <div class="ccard" onclick="selCourse('${c.id}')" id="sc_${c.id}">
+      <div class="ccode">${c.code}</div>
+      <div class="cname">${c.nameT||c.name}</div>
+      <div class="cmeta">
+        <span class="chip gold">${c.credits}</span>
+        <span class="chip">กลุ่ม ${c.group}</span>
+        <span class="chip">ปี ${c.year}</span>
+      </div>
+    </div>`).join('');
+  selCourse(my[0].id);
+}
+function selCourse(cid){
+  S.selC=cid;
+  document.querySelectorAll('#sCgrid .ccard').forEach(c=>c.classList.remove('on'));
+  const card=document.getElementById('sc_'+cid);
+  if(card) card.classList.add('on');
+  const course=S.courses.find(c=>c.id===cid);
+  const u=S.user;
+  const key=`${u.id}_${cid}`;
+  const sc=S.scores[key];
+  const pan=document.getElementById('spanel');
+  pan.classList.add('on');
+  if(!sc){
+    pan.innerHTML=`<div class="empty"><div class="empty-icon">⏳</div>
+      <h3>ยังไม่มีคะแนน</h3><p>อาจารย์ยังไม่ได้บันทึกคะแนนสำหรับวิชานี้</p></div>`;
+    return;
+  }
+  const total=sc.col+sc.mid+sc.fin+sc.aff;
+  const g=grade(total);
+  const gColor=gcol(g);
+  pan.innerHTML=`
+    <div class="cinfo-bar">
+      <div class="cinfo-icon">📖</div>
+      <div class="cinfo-text">
+        <h2>${course.nameT||course.name}</h2>
+        <p>${course.code} · ${course.credits} · กลุ่ม ${course.group} · ปี ${course.year}</p>
+      </div>
+    </div>
+    <div class="ssummary">
+      <div class="stotal">
+        <div class="stlabel">คะแนนรวม</div>
+        <div class="stnum">${total}</div>
+        <div class="stmax">/ 100</div>
+        <div class="stgrade">${g}</div>
+      </div>
+      <div class="sdetail">
+        <div class="sdr"><span class="sdl">เกรดเฉลี่ย (GP)</span><span class="sdv" style="color:${gColor}">${gp(g)}</span></div>
+        <div class="sdr"><span class="sdl">สถานะ</span>
+          <span class="badge ${total>=50?'ok':'err'}">${total>=50?'✓ ผ่าน':'✗ ไม่ผ่าน'}</span></div>
+        <div class="sdr"><span class="sdl">คะแนนรวม</span><span class="sdv">${total} / 100</span></div>
+        <div class="sdr"><span class="sdl">เกรด</span>
+          <span class="sdv" style="font-size:18px;color:${gColor}">${g}</span></div>
+      </div>
+    </div>
+    <div class="sbgrid">
+      ${bar('คะแนนเก็บ','สะสมระหว่างเรียน',sc.col,30,'col')}
+      ${bar('คะแนนกลางภาค','Midterm Examination',sc.mid,30,'mid')}
+      ${bar('คะแนนปลายภาค','Final Examination',sc.fin,30,'fin')}
+      ${bar('คะแนนจิตพิสัย','Affective Domain',sc.aff,10,'aff')}
+    </div>`;
+  setTimeout(()=>{
+    pan.querySelectorAll('.bfill').forEach(el=>{el.style.width=el.dataset.pct+'%';});
+  },40);
+}
+function bar(label,sub,val,max,cls){
+  const pct=Math.round(val/max*100);
+  return`<div class="sbc">
+    <div class="bhead">
+      <div><div class="blabel">${label}</div><div class="bsub">${sub}</div></div>
+      <div><div class="bval">${val}</div><div class="bmax">/ ${max}</div></div>
+    </div>
+    <div class="btrack"><div class="bfill ${cls}" data-pct="${pct}" style="width:0%"></div></div>
+    <div class="bpct">${pct}%</div>
+  </div>`;
+}
+
+/* Enroll modal */
+function openEnrollModal(){
+  const u=S.user;
+  const list=document.getElementById('enrollList');
+  list.innerHTML=S.courses.map(c=>`
+    <div class="clist-item ${(u.cids||[]).includes(c.id)?'on':''}" onclick="toggleEnroll('${c.id}',this)" id="ec_${c.id}">
+      <input type="checkbox" ${(u.cids||[]).includes(c.id)?'checked':''} onclick="toggleEnroll('${c.id}',this.closest('.clist-item'))">
+      <div><div class="clist-name">${c.nameT||c.name}</div>
+        <div class="clist-code">${c.code} · ${c.credits} · กลุ่ม ${c.group}</div></div>
+    </div>`).join('');
+  document.getElementById('enrollMover').classList.add('on');
+}
+function toggleEnroll(cid,el){
+  el.classList.toggle('on');
+  const cb=el.querySelector('input');
+  if(cb) cb.checked=el.classList.contains('on');
+}
+function closeEnrollModal(){document.getElementById('enrollMover').classList.remove('on');}
+async function saveEnroll(){
+  const u=S.user;
+  const newCids=S.courses.filter(c=>document.getElementById('ec_'+c.id)?.classList.contains('on')).map(c=>c.id);
+  u.cids=newCids;
+  const idx=S.studs.findIndex(s=>s.id===u.id);
+  if(idx>=0) S.studs[idx]=u;
+  save();
+  sbUpsertStudent(u).catch(()=>{});
+  closeEnrollModal();
+  renderSCourses(u);
+  showToast('✅ บันทึกการลงทะเบียนแล้ว');
+}
+
+/* ══════════════════════════════════════
+   TEACHER VIEW
+══════════════════════════════════════ */
+function showTeacher(u){
+  document.getElementById('loginView').style.display='none';
+  document.getElementById('appT').classList.add('on');
+  document.getElementById('tName').textContent=u.name;
+  switchTTab('courses');
+}
+function switchTTab(tab){
+  ['courses','members','excel'].forEach(t=>{
+    document.getElementById('tpanel-'+t).classList.toggle('on',t===tab);
+    document.getElementById('tt-'+t).classList.toggle('on',t===tab);
+  });
+  if(tab==='courses') renderTCourses(S.user);
+  if(tab==='members') renderMembers();
+  if(tab==='excel') renderExcelPanel();
+}
+
+/* ── COURSES ── */
+function renderTCourses(u){
+  const g=document.getElementById('tCgrid');
+  if(!S.courses.length){
+    g.innerHTML='<div class="empty"><div class="empty-icon">📚</div><h3>ยังไม่มีรายวิชา</h3><p>เพิ่มรายวิชาใหม่ด้านบน</p></div>';
+    return;
+  }
+  g.innerHTML=S.courses.map(c=>{
+    const enrolled=S.studs.filter(s=>(s.cids||[]).includes(c.id)).length;
+    return`<div class="ccard ${S.selC===c.id?'on':''}" onclick="selTCourse('${c.id}')" id="tc_${c.id}">
+      <div class="ccode">${c.code}</div>
+      <div class="cname">${c.nameT||c.name}</div>
+      <div class="cmeta">
+        <span class="chip gold">${c.credits}</span>
+        <span class="chip">กลุ่ม ${c.group}</span>
+        <span class="chip">ปี ${c.year}</span>
+        <span class="chip ok">${enrolled} นิสิต</span>
+      </div>
+    </div>`;
+  }).join('');
+  if(S.selC) selTCourse(S.selC);
+  else if(S.courses.length) selTCourse(S.courses[0].id);
+}
+function selTCourse(cid){
+  S.selC=cid;
+  document.querySelectorAll('#tCgrid .ccard').forEach(c=>c.classList.remove('on'));
+  const card=document.getElementById('tc_'+cid);
+  if(card) card.classList.add('on');
+  const course=S.courses.find(c=>c.id===cid);
+  const enrolled=S.studs.filter(s=>(s.cids||[]).includes(cid));
+  const panel=document.getElementById('tPanel');
+  panel.hidden=false;
+  const scores=enrolled.map(s=>{
+    const sc=S.scores[`${s.id}_${cid}`];
+    return{s,sc,total:sc?sc.col+sc.mid+sc.fin+sc.aff:null};
+  });
+  const hasScore=scores.filter(x=>x.total!==null);
+  const avg=hasScore.length?Math.round(hasScore.reduce((a,x)=>a+x.total,0)/hasScore.length):'-';
+  const gDist={A:0,'B+':0,B:0,'C+':0,C:0,'D+':0,D:0,F:0};
+  hasScore.forEach(x=>gDist[grade(x.total)]++);
+  panel.innerHTML=`
+    <div class="srow">
+      <div class="sc"><div class="scv">${enrolled.length}</div><div class="scl">นิสิตที่ลงทะเบียน</div></div>
+      <div class="sc"><div class="scv">${hasScore.length}</div><div class="scl">มีคะแนนแล้ว</div></div>
+      <div class="sc"><div class="scv">${avg}</div><div class="scl">คะแนนเฉลี่ย</div></div>
+      <div class="sc"><div class="scv">${gDist.A+gDist['B+']}</div><div class="scl">A / B+ (ผ่านดี)</div></div>
+      <div class="sc"><div class="scv">${gDist.F}</div><div class="scl">F (ไม่ผ่าน)</div></div>
+    </div>
+    <div class="twrap">
+      <div class="thead-row">
+        <div><h3>${course.nameT||course.name}</h3><p>${course.code} · กลุ่ม ${course.group}</p></div>
+        <button class="btn-add" onclick="openM(null,'${cid}')">＋ บันทึกทุกคน</button>
+      </div>
+      <table>
+        <thead><tr>
+          <th>รหัสนิสิต</th><th>ชื่อ-นามสกุล</th>
+          <th class="r">เก็บ<br><small>/30</small></th>
+          <th class="r">กลางภาค<br><small>/30</small></th>
+          <th class="r">ปลายภาค<br><small>/30</small></th>
+          <th class="r">จิตพิสัย<br><small>/10</small></th>
+          <th class="r">รวม<br><small>/100</small></th>
+          <th class="r">เกรด</th>
+          <th class="r">แก้ไข</th>
+        </tr></thead>
+        <tbody>${scores.map(({s,sc,total})=>{
+          const g=total!==null?grade(total):'—';
+          return`<tr>
+            <td><span class="sid">${s.uid}</span></td>
+            <td>${s.name}</td>
+            <td class="r">${sc?sc.col:'—'}</td>
+            <td class="r">${sc?sc.mid:'—'}</td>
+            <td class="r">${sc?sc.fin:'—'}</td>
+            <td class="r">${sc?sc.aff:'—'}</td>
+            <td class="r" style="font-size:15px;color:${total!==null?gcol(g):'var(--tx-light)'}">${total??'—'}</td>
+            <td class="r" style="color:${total!==null?gcol(g):'var(--tx-light)'};font-weight:800">${g}</td>
+            <td class="r"><button class="btnedit" onclick="openM('${s.id}','${cid}')">แก้ไข</button></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>`;
+}
+
+function togAC(){document.getElementById('acbody').classList.toggle('on');}
+async function addCourse(){
+  const code=document.getElementById('nc_code').value.trim();
+  const cred=document.getElementById('nc_cred').value.trim();
+  const nameT=document.getElementById('nc_name').value.trim();
+  const nameE=document.getElementById('nc_nameE').value.trim();
+  const grp=parseInt(document.getElementById('nc_grp').value)||1;
+  const yr=parseInt(document.getElementById('nc_yr').value)||2567;
+  if(!code||!nameT){showToast('⚠️ กรุณากรอกรหัสวิชาและชื่อวิชา');return;}
+  const c={id:nextId(S.courses,'c'),code,name:nameE||nameT,nameT,credits:cred||'3(3-0-6)',group:grp,year:yr,tid:S.user.id};
+  S.courses.push(c);
+  save();
+  sbUpsertCourse(c).catch(()=>{});
+  togAC();
+  ['nc_code','nc_cred','nc_name','nc_nameE','nc_grp','nc_yr'].forEach(i=>{const el=document.getElementById(i);if(el)el.value='';});
+  renderTCourses(S.user);
+  showToast('✅ เพิ่มรายวิชาแล้ว');
+}
+
+/* ── SCORE MODAL ── */
+function openM(sid,cid){
+  S.editSid=sid; S.editCid=cid;
+  const mover=document.getElementById('mover');
+  if(sid){
+    const st=S.studs.find(s=>s.id===sid);
+    document.getElementById('mSname').textContent=st?st.name:'นิสิต';
+    const sc=S.scores[`${sid}_${cid}`]||{};
+    document.getElementById('mCol').value=sc.col??'';
+    document.getElementById('mMid').value=sc.mid??'';
+    document.getElementById('mFin').value=sc.fin??'';
+    document.getElementById('mAff').value=sc.aff??'';
+  } else {
+    const c=S.courses.find(x=>x.id===cid);
+    document.getElementById('mSname').textContent='บันทึกคะแนนทุกคนในวิชา: '+(c?c.nameT||c.name:'');
+    ['mCol','mMid','mFin','mAff'].forEach(id=>document.getElementById(id).value='');
+  }
+  mover.classList.add('on');
+}
+function closeM(){document.getElementById('mover').classList.remove('on');}
+async function saveScores(){
+  const col=parseFloat(document.getElementById('mCol').value);
+  const mid=parseFloat(document.getElementById('mMid').value);
+  const fin=parseFloat(document.getElementById('mFin').value);
+  const aff=parseFloat(document.getElementById('mAff').value);
+  if([col,mid,fin,aff].some(isNaN)){showToast('⚠️ กรุณากรอกคะแนนให้ครบ');return;}
+  if(col<0||col>30||mid<0||mid>30||fin<0||fin>30||aff<0||aff>10){showToast('⚠️ คะแนนเกินขอบเขตที่กำหนด');return;}
+  const{editSid,editCid}=S;
+  if(editSid){
+    S.scores[`${editSid}_${editCid}`]={col,mid,fin,aff};
+    save();
+    sbUpsertScore(editSid,editCid,{col,mid,fin,aff}).catch(()=>{});
+  } else {
+    const targets=S.studs.filter(s=>(s.cids||[]).includes(editCid));
+    targets.forEach(s=>{S.scores[`${s.id}_${editCid}`]={col,mid,fin,aff};});
+    save();
+    sbUpsertScoresBulk(targets.map(s=>({student_id:s.id,course_id:editCid,col,mid,fin,aff}))).catch(()=>{});
+  }
+  closeM();
+  selTCourse(editCid);
+  showToast('✅ บันทึกคะแนนแล้ว');
+}
+
+/* ── MEMBERS ── */
+function renderMembers(){
+  const q=(document.getElementById('memberSearch').value||'').trim().toLowerCase();
+  const list=q?S.studs.filter(s=>s.name.toLowerCase().includes(q)||s.uid.includes(q)):S.studs;
+  document.getElementById('memberCount').textContent=`ทั้งหมด ${list.length} คน`;
+  const tb=document.getElementById('memberTable');
+  if(!list.length){
+    tb.innerHTML='<tr><td colspan="4" style="text-align:center;padding:30px;color:var(--tx-muted)">ไม่พบสมาชิก</td></tr>';
+    return;
+  }
+  tb.innerHTML=list.map(s=>{
+    const chips=(s.cids||[]).map(cid=>{
+      const c=S.courses.find(x=>x.id===cid);
+      return c?`<span class="chip-sm">${c.code}</span>`:'';
+    }).join('');
+    return`<tr>
+      <td><span class="sid">${s.uid}</span></td>
+      <td>${s.name}</td>
+      <td><div class="course-chips">${chips||'<span style="color:var(--tx-light);font-size:12px">ยังไม่ลงทะเบียน</span>'}</div></td>
+      <td class="r" style="white-space:nowrap">
+        <button class="btnedit" onclick="openMgCourses('${s.id}')" style="margin-right:5px">จัดการวิชา</button>
+        <button class="btndel" onclick="deleteMember('${s.id}')">ลบ</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function deleteMember(sid){
+  if(!confirm('ยืนยันการลบสมาชิกนี้?')) return;
+  S.studs=S.studs.filter(s=>s.id!==sid);
+  Object.keys(S.scores).filter(k=>k.startsWith(sid+'_')).forEach(k=>delete S.scores[k]);
+  save();
+  sbDeleteStudent(sid).catch(()=>{});
+  renderMembers();
+  showToast('🗑️ ลบสมาชิกแล้ว');
+}
+
+function openMgCourses(sid){
+  S.mgSid=sid;
+  const st=S.studs.find(s=>s.id===sid);
+  document.getElementById('mgMemberName').textContent=st?st.name:'';
+  const list=document.getElementById('mgCoursesList');
+  list.innerHTML=S.courses.map(c=>`
+    <div class="clist-item ${(st.cids||[]).includes(c.id)?'on':''}" onclick="toggleMgCourse('${c.id}',this)" id="mgc_${c.id}">
+      <input type="checkbox" ${(st.cids||[]).includes(c.id)?'checked':''}
+             onclick="toggleMgCourse('${c.id}',this.closest('.clist-item'))">
+      <div><div class="clist-name">${c.nameT||c.name}</div>
+        <div class="clist-code">${c.code} · ${c.credits}</div></div>
+    </div>`).join('');
+  document.getElementById('mgCoursesMover').classList.add('on');
+}
+function toggleMgCourse(cid,el){
+  el.classList.toggle('on');
+  const cb=el.querySelector('input'); if(cb) cb.checked=el.classList.contains('on');
+}
+function closeMgCourses(){document.getElementById('mgCoursesMover').classList.remove('on');}
+async function saveMgCourses(){
+  const st=S.studs.find(s=>s.id===S.mgSid);
+  if(!st) return;
+  st.cids=S.courses.filter(c=>document.getElementById('mgc_'+c.id)?.classList.contains('on')).map(c=>c.id);
+  save();
+  sbUpsertStudent(st).catch(()=>{});
+  closeMgCourses();
+  renderMembers();
+  showToast('✅ อัปเดตรายวิชาแล้ว');
+}
+
+/* ══════════════════════════════════════
+   EXCEL EXPORT / IMPORT
+══════════════════════════════════════ */
+function renderExcelPanel(){
+  const sel=document.getElementById('exportCourse');
+  sel.innerHTML=S.courses.map(c=>`<option value="${c.id}">${c.code} – ${c.nameT||c.name}</option>`).join('');
+}
+function exportExcel(){
+  const cid=document.getElementById('exportCourse').value;
+  const course=S.courses.find(c=>c.id===cid);
+  if(!course){showToast('⚠️ กรุณาเลือกรายวิชา');return;}
+  const enrolled=S.studs.filter(s=>(s.cids||[]).includes(cid));
+  const header=['รหัสนิสิต','ชื่อ-นามสกุล','คะแนนเก็บ (0-30)','คะแนนกลางภาค (0-30)','คะแนนปลายภาค (0-30)','คะแนนจิตพิสัย (0-10)','รวม','เกรด'];
+  const rows=enrolled.map(s=>{
+    const sc=S.scores[`${s.id}_${cid}`];
+    const total=sc?sc.col+sc.mid+sc.fin+sc.aff:null;
+    return[s.uid,s.name,sc?sc.col:'',sc?sc.mid:'',sc?sc.fin:'',sc?sc.aff:'',total??'',total!==null?grade(total):''];
+  });
+  try{
+    const wb=XLSX.utils.book_new();
+    const ws=XLSX.utils.aoa_to_sheet([header,...rows]);
+    ws['!cols']=header.map((_,i)=>({wch:i===1?30:i===0?14:18}));
+    const range=XLSX.utils.decode_range(ws['!ref']);
+    for(let C=range.s.c;C<=range.e.c;C++){
+      const addr=XLSX.utils.encode_cell({r:0,c:C});
+      if(!ws[addr]) continue;
+      ws[addr].s={font:{bold:true},fill:{fgColor:{rgb:'C4912A'}},alignment:{horizontal:'center'}};
+    }
+    XLSX.utils.book_append_sheet(wb,ws,'คะแนน');
+    const info=[['รายวิชา',course.nameT||course.name],['รหัสวิชา',course.code],
+                ['หน่วยกิต',course.credits],['กลุ่ม',course.group],['ปีการศึกษา',course.year]];
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(info),'ข้อมูลรายวิชา');
+    const fname=`score_${course.code}_grp${course.group}.xlsx`;
+    XLSX.writeFile(wb,fname);
+    showToast('📥 ส่งออก Excel สำเร็จ: '+fname,3500);
+    document.getElementById('exportMsg').style.display='none';
+  }catch(e){
+    const tsv=[header,...rows].map(r=>r.join('\t')).join('\n');
+    try{
+      navigator.clipboard.writeText(tsv).then(()=>{
+        showToast('📋 คัดลอกข้อมูลแล้ว — กด Ctrl+V วางใน Excel',4000);
+        const msg=document.getElementById('exportMsg');
+        msg.textContent='⚠️ ดาวน์โหลดไม่ได้ในสภาพแวดล้อมนี้ — ข้อมูลถูกคัดลอกแล้ว';
+        msg.style.display='block';
+      });
+    }catch(e2){showToast('❌ ไม่สามารถส่งออกได้ในขณะนี้');}
+  }
+}
+function handleDrop(ev){
+  ev.preventDefault();
+  document.getElementById('dropzone').classList.remove('over');
+  const file=ev.dataTransfer.files[0];
+  if(file) processImport(file);
+}
+function importExcel(input){
+  const file=input.files[0];
+  if(file) processImport(file);
+  input.value='';
+}
+async function processImport(file){
+  const res=document.getElementById('importResult');
+  res.style.display='none';
+  const reader=new FileReader();
+  reader.onload=async function(e){
+    try{
+      const data=new Uint8Array(e.target.result);
+      const wb=XLSX.read(data,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      if(rows.length<2) throw new Error('ไม่พบข้อมูลในไฟล์');
+      let updated=0,skipped=0;
+      const sbRows=[];
+      for(let i=1;i<rows.length;i++){
+        const row=rows[i];
+        const uid=String(row[0]||'').trim();
+        if(!uid) continue;
+        const st=S.studs.find(s=>s.uid===uid);
+        if(!st){skipped++;continue;}
+        const col=parseFloat(row[2]),mid=parseFloat(row[3]),fin=parseFloat(row[4]),aff=parseFloat(row[5]);
+        if([col,mid,fin,aff].some(isNaN)||col<0||col>30||mid<0||mid>30||fin<0||fin>30||aff<0||aff>10){skipped++;continue;}
+        const enrolledCids=st.cids||[];
+        const cid=document.getElementById('exportCourse').value||enrolledCids[0];
+        if(!cid){skipped++;continue;}
+        S.scores[`${st.id}_${cid}`]={col,mid,fin,aff};
+        sbRows.push({student_id:st.id,course_id:cid,col,mid,fin,aff});
+        updated++;
+      }
+      save();
+      if(sbRows.length) sbUpsertScoresBulk(sbRows).catch(()=>{});
+      res.className='import-result ok';
+      res.textContent=`✅ นำเข้าสำเร็จ: อัปเดต ${updated} คน${skipped?' · ข้ามไป '+skipped+' แถว':''}`;
+      res.style.display='block';
+      showToast(`✅ นำเข้าคะแนน ${updated} คนสำเร็จ`);
+      if(S.selC) selTCourse(S.selC);
+    }catch(err){
+      res.className='import-result err';
+      res.textContent='❌ เกิดข้อผิดพลาด: '+err.message;
+      res.style.display='block';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* ══════════════════════════════════════
+   INIT
+══════════════════════════════════════ */
+(async function init(){
+  showLoading();
+  setLoading('กำลังเริ่มต้น…');
+
+  const cfg=await getSBConfig();
+  const offline=localStorage.getItem(LS_OFFLINE)==='1';
+
+  if(cfg.url&&cfg.key&&!offline){
+    initSB(cfg.url,cfg.key);
+  }
+
+  if(useSupabase||offline){
+    // We have a decision — proceed
+    await loadData();
+    hideLoading();
+    updateBadge();
+    document.getElementById('loginView').style.display='flex';
+  } else {
+    // No config yet → show setup modal
+    hideLoading();
+    openSetup();
+  }
+})();
+</script>
+</body>
+</html>
