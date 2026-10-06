@@ -500,6 +500,13 @@ select.finput{padding-right:14px}
 .cgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px;margin-bottom:24px}
 .ccard{background:var(--surface);border-radius:var(--r);padding:16px 18px;
        border:1.5px solid var(--border);transition:all .18s;position:relative;overflow:hidden;cursor:pointer}
+.unenroll-btn{position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;border:none;
+  background:transparent;color:var(--tx-light);font-size:12px;cursor:pointer;display:flex;align-items:center;
+  justify-content:center;opacity:0;transition:opacity .15s,background .15s;z-index:2;line-height:1}
+.ccard:hover .unenroll-btn{opacity:1}
+.unenroll-btn:hover{background:#fee2e2;color:#dc2626}
+.unenroll-confirm{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:100px;text-align:center;padding:8px 4px}
 .ccard::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;
                background:var(--gold);opacity:0;transition:opacity .18s;border-radius:4px 0 0 4px}
 .ccard:hover,.ccard.on{border-color:var(--border-gold);box-shadow:var(--sh)}
@@ -1801,8 +1808,7 @@ document.addEventListener('keydown',e=>{
 function showStudent(u){
   document.getElementById('loginView').style.display='none';document.getElementById('loginFooter').style.display='none';
   document.getElementById('appS').classList.add('on');
-  const parts=u.name.split(' ');
-  document.getElementById('sName').textContent=u.name;
+  document.getElementById('sName').textContent=u.name||u.uid||'นิสิต';
   renderSCourses(u);
 }
 function renderSCourses(u){
@@ -1816,6 +1822,7 @@ function renderSCourses(u){
   }
   g.innerHTML=my.map(c=>`
     <div class="ccard" onclick="selCourse('${c.id}')" id="sc_${c.id}">
+      <button class="unenroll-btn" onclick="event.stopPropagation();unenrollCourse('${c.id}')" title="ถอนรายวิชา">✕</button>
       <div class="ccode">${c.code}</div>
       <div class="cname">${c.nameT||c.name}</div>
       <div class="cmeta">
@@ -1826,7 +1833,40 @@ function renderSCourses(u){
     </div>`).join('');
   selCourse(my[0].id);
 }
-function selCourse(cid){
+async function unenrollCourse(cid){
+  const u=S.user;
+  const course=S.courses.find(c=>c.id===cid);
+  const name=course?(course.nameT||course.name):'รายวิชานี้';
+  // Show inline confirm inside the card
+  const card=document.getElementById('sc_'+cid);
+  if(!card) return;
+  card.innerHTML=`
+    <div class="unenroll-confirm">
+      <div style="font-size:1.1rem;font-weight:600;color:var(--navy);margin-bottom:8px">ถอนรายวิชา?</div>
+      <div style="font-size:.85rem;color:#666;margin-bottom:12px">${name}</div>
+      <div style="display:flex;gap:8px;justify-content:center">
+        <button onclick="renderSCourses(S.user)" style="padding:6px 16px;border:1px solid #ccc;border-radius:8px;background:#fff;cursor:pointer;font-size:.85rem">ยกเลิก</button>
+        <button onclick="confirmUnenroll('${cid}')" style="padding:6px 16px;border:none;border-radius:8px;background:var(--gold);color:#fff;cursor:pointer;font-size:.85rem;font-weight:600">ถอน</button>
+      </div>
+    </div>`;
+}
+async function confirmUnenroll(cid){
+  const u=S.user;
+  u.cids=(u.cids||[]).filter(id=>id!==cid);
+  if(useSupabase && u.id){
+    try{ await sbUpsertStudent(u); } catch(e){ console.error(e); }
+  } else {
+    const ls=JSON.parse(localStorage.getItem('buu_students')||'[]');
+    const idx=ls.findIndex(s=>s.id===u.id);
+    if(idx>=0){ ls[idx]=u; localStorage.setItem('buu_students',JSON.stringify(ls)); }
+  }
+  // Reset panel and re-render
+  const pan=document.getElementById('spanel');
+  pan.classList.remove('on');
+  pan.innerHTML='';
+  renderSCourses(u);
+}
+async function selCourse(cid){
   S.selC=cid;
   document.querySelectorAll('#sCgrid .ccard').forEach(c=>c.classList.remove('on'));
   const card=document.getElementById('sc_'+cid);
@@ -1834,15 +1874,33 @@ function selCourse(cid){
   const course=S.courses.find(c=>c.id===cid);
   const u=S.user;
   const key=`${u.id}_${cid}`;
-  const sc=S.scores[key];
   const pan=document.getElementById('spanel');
   pan.classList.add('on');
+  pan.innerHTML=`<div class="empty"><div class="empty-icon">⏳</div><h3>กำลังโหลดคะแนน...</h3></div>`;
+  // Always fetch fresh score from Supabase so student sees latest teacher updates
+  if(useSupabase && u.id){
+    try{
+      const {data}=await SB.from('score_scores').select('*').eq('student_id',u.id).eq('course_id',cid);
+      if(data && data.length){
+        const r=data[0];
+        const cfg=getCourseConfig(course);
+        const fresh={};
+        cfg.forEach(item=>{ fresh[item.id]=r[item.id]??null; });
+        S.scores[key]=fresh;
+      } else {
+        S.scores[key]=undefined;
+      }
+    } catch(e){ /* use cached if fetch fails */ }
+  }
+  const sc=S.scores[key];
   if(!sc){
     pan.innerHTML=`<div class="empty"><div class="empty-icon">⏳</div>
       <h3>ยังไม่มีคะแนน</h3><p>อาจารย์ยังไม่ได้บันทึกคะแนนสำหรับวิชานี้</p></div>`;
     return;
   }
-  const total=sc.col+sc.mid+sc.fin+sc.aff;
+  const config=getCourseConfig(course);
+  const colTotal=config.reduce((s,x)=>s+x.max,0);
+  const total=config.reduce((sum,item)=>sum+(sc[item.id]??0),0);
   const g=grade(total);
   const gColor=gcol(g);
   pan.innerHTML=`
@@ -1857,34 +1915,32 @@ function selCourse(cid){
       <div class="stotal">
         <div class="stlabel">คะแนนรวม</div>
         <div class="stnum">${total}</div>
-        <div class="stmax">/ 100</div>
+        <div class="stmax">/ ${colTotal}</div>
         <div class="stgrade">${g}</div>
       </div>
       <div class="sdetail">
         <div class="sdr"><span class="sdl">เกรดเฉลี่ย (GP)</span><span class="sdv" style="color:${gColor}">${gp(g)}</span></div>
         <div class="sdr"><span class="sdl">สถานะ</span>
-          <span class="badge ${total>=50?'ok':'err'}">${total>=50?'✓ ผ่าน':'✗ ไม่ผ่าน'}</span></div>
-        <div class="sdr"><span class="sdl">คะแนนรวม</span><span class="sdv">${total} / 100</span></div>
+          <span class="badge ${total>=colTotal*0.5?'ok':'err'}">${total>=colTotal*0.5?'✓ ผ่าน':'✗ ไม่ผ่าน'}</span></div>
+        <div class="sdr"><span class="sdl">คะแนนรวม</span><span class="sdv">${total} / ${colTotal}</span></div>
         <div class="sdr"><span class="sdl">เกรด</span>
           <span class="sdv" style="font-size:18px;color:${gColor}">${g}</span></div>
       </div>
     </div>
     <div class="sbgrid">
-      ${bar('คะแนนเก็บ','สะสมระหว่างเรียน',sc.col,30,'col')}
-      ${bar('คะแนนกลางภาค','Midterm Examination',sc.mid,30,'mid')}
-      ${bar('คะแนนปลายภาค','Final Examination',sc.fin,30,'fin')}
-      ${bar('คะแนนจิตพิสัย','Affective Domain',sc.aff,10,'aff')}
+      ${config.map(item=>bar(item.label,'',sc[item.id]??0,item.max,item.id)).join('')}
     </div>`;
   setTimeout(()=>{
     pan.querySelectorAll('.bfill').forEach(el=>{el.style.width=el.dataset.pct+'%';});
   },40);
 }
 function bar(label,sub,val,max,cls){
-  const pct=Math.round(val/max*100);
+  const v=val??0;
+  const pct=Math.round(v/max*100);
   return`<div class="sbc">
     <div class="bhead">
-      <div><div class="blabel">${label}</div><div class="bsub">${sub}</div></div>
-      <div><div class="bval">${val}</div><div class="bmax">/ ${max}</div></div>
+      <div><div class="blabel">${label}</div><div class="bsub">${sub||''}</div></div>
+      <div><div class="bval">${v}</div><div class="bmax">/ ${max}</div></div>
     </div>
     <div class="btrack"><div class="bfill ${cls}" data-pct="${pct}" style="width:0%"></div></div>
     <div class="bpct">${pct}%</div>
@@ -2315,7 +2371,7 @@ function renderMembers(){
     tb.innerHTML='<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--tx-muted)">ไม่พบสมาชิก</td></tr>';
     // populate bulk course dropdown
     const bc=document.getElementById('bulkCourse');
-    if(bc) bc.innerHTML='<option value="">— เลือกรายวิชา —</option>'+S.courses.map(c=>`<option value="${c.id}">${c.code} – ${c.nameT||c.name}</option>`).join('');
+    if(bc) bc.innerHTML='<option value="">— เลือกรายวิชา —</option>'+S.courses.map(c=>`<option value="${c.id}">${c.code} กลุ่ม ${c.group} – ${c.nameT||c.name}</option>`).join('');
     return;
   }
   tb.innerHTML=list.map(s=>{
@@ -2337,7 +2393,7 @@ function renderMembers(){
   }).join('');
   // populate bulk course dropdown
   const bc=document.getElementById('bulkCourse');
-  if(bc) bc.innerHTML='<option value="">— เลือกรายวิชา —</option>'+S.courses.map(c=>`<option value="${c.id}">${c.code} – ${c.nameT||c.name}</option>`).join('');
+  if(bc) bc.innerHTML='<option value="">— เลือกรายวิชา —</option>'+S.courses.map(c=>`<option value="${c.id}">${c.code} กลุ่ม ${c.group} – ${c.nameT||c.name}</option>`).join('');
   // reset select-all checkbox
   const sa=document.getElementById('selectAllMembers');
   if(sa) sa.checked=false;
@@ -2535,7 +2591,7 @@ async function saveEditMember(){
    EXCEL EXPORT / IMPORT
 ══════════════════════════════════════ */
 function renderExcelPanel(){
-  const opts=S.courses.map(c=>`<option value="${c.id}">${c.code} – ${c.nameT||c.name}</option>`).join('');
+  const opts=S.courses.map(c=>`<option value="${c.id}">${c.code} กลุ่ม ${c.group} – ${c.nameT||c.name}</option>`).join('');
   document.getElementById('exportCourse').innerHTML=opts;
   document.getElementById('importCourse').innerHTML=opts;
 }
