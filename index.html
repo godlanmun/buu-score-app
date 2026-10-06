@@ -1905,7 +1905,8 @@ async function selCourse(cid){
     } catch(e){ /* use cached if fetch fails */ }
   }
   const sc=S.scores[key];
-  if(!sc){
+  const hasAnyScore=sc&&Object.values(sc).some(v=>v!==null&&v!==undefined);
+  if(!sc||!hasAnyScore){
     pan.innerHTML=`<div class="empty"><div class="empty-icon">⏳</div>
       <h3>ยังไม่มีคะแนน</h3><p>อาจารย์ยังไม่ได้บันทึกคะแนนสำหรับวิชานี้</p></div>`;
     return;
