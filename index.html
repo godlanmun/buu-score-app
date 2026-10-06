@@ -1124,6 +1124,17 @@ tbody tr:hover td{background:var(--surf2)}
         </div>
         <input type="file" id="importFile" class="import-input" accept=".xlsx,.xls" onchange="importExcel(this)">
         <div class="import-result" id="importResult"></div>
+        <!-- Preview table + save button appear after parsing -->
+        <div id="importPreviewWrap" style="display:none;margin-top:14px">
+          <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--navy)">ตรวจสอบข้อมูลก่อนบันทึก</div>
+          <div style="overflow-x:auto;max-height:260px;border:1px solid var(--border);border-radius:var(--r-sm)">
+            <table id="importPreviewTable" style="width:100%;border-collapse:collapse;font-size:12px"></table>
+          </div>
+          <div id="importSaveErr" style="display:none;color:var(--err);font-size:13px;margin-top:8px;padding:8px 12px;background:var(--err-bg);border-radius:8px"></div>
+          <button id="importSaveBtn" class="btn-pri" style="width:100%;margin-top:10px" onclick="confirmImportSave()">
+            💾 บันทึกลงฐานข้อมูล
+          </button>
+        </div>
       </div>
     </div><!-- end xpanel-grid -->
   </div>
@@ -2843,6 +2854,8 @@ function handleDrop(ev){
   const file=ev.dataTransfer.files[0];
   if(file) processImport(file);
 }
+let _importPending=null; // { cid, sbRows, newStudents }
+
 function importExcel(input){
   const file=input.files[0];
   if(file) processImport(file);
@@ -2850,7 +2863,10 @@ function importExcel(input){
 }
 async function processImport(file){
   const res=document.getElementById('importResult');
+  const previewWrap=document.getElementById('importPreviewWrap');
   res.style.display='none';
+  previewWrap.style.display='none';
+  _importPending=null;
   const cid=document.getElementById('importCourse').value;
   const course=S.courses.find(c=>c.id===cid);
   if(!course){
@@ -2868,50 +2884,68 @@ async function processImport(file){
       const ws=wb.Sheets[wb.SheetNames[0]];
       const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
       if(rows.length<2) throw new Error('ไม่พบข้อมูลในไฟล์');
-      let updated=0,skipped=0,skipReasons=[];
       const sbRows=[];
+      const newStudents=[];
+      const previewRows=[];
       for(let i=1;i<rows.length;i++){
         const row=rows[i];
         const uid=String(row[0]||'').trim();
         if(!uid) continue;
         let st=S.studs.find(s=>s.uid===uid);
+        const isNew=!st;
         if(!st){
-          // Auto-create student from Excel (col B = name)
           const name=String(row[1]||'').trim()||uid;
           st={id:nextId(S.studs,'s'),uid,name,pw:uid,cids:[],role:'student'};
           S.studs.push(st);
-          sbUpsertStudent(st).catch(()=>{});
+          newStudents.push(st);
         }
-        // Auto-enroll if not yet in course
+        // Auto-enroll
+        let enrolled=false;
         if(!(st.cids||[]).includes(cid)){
           if(!st.cids) st.cids=[];
           st.cids.push(cid);
-          sbUpsertStudent(st).catch(()=>{});
+          enrolled=true;
         }
-        // Merge scores: empty cell keeps existing value, out-of-range clamped
+        // Parse scores
         const existing=S.scores[`${st.id}_${cid}`]||{};
         const vals={...existing};
-        let hasAny=false;
         config.forEach((item,ci)=>{
           const raw=row[2+ci];
           const v=parseFloat(raw);
-          if(raw===''||raw===null||raw===undefined||isNaN(v)) return; // empty → keep existing
-          const clamped=Math.min(item.max,Math.max(0,v));
-          vals[item.id]=clamped;
-          hasAny=true;
+          if(raw===''||raw===null||raw===undefined||isNaN(v)) return;
+          vals[item.id]=Math.min(item.max,Math.max(0,v));
         });
         S.scores[`${st.id}_${cid}`]=vals;
         sbRows.push({student_id:st.id,course_id:cid,...vals});
-        updated++;
+        previewRows.push({uid:st.uid,name:st.name,vals,isNew,enrolled});
       }
+      if(!sbRows.length) throw new Error('ไม่พบข้อมูลนิสิตในไฟล์');
+      // Store pending
+      _importPending={cid,sbRows,newStudents};
       save();
-      if(sbRows.length) sbUpsertScoresBulk(sbRows).catch(()=>{});
+      // Build preview table
+      const th=config.map(item=>`<th style="padding:5px 8px;border-bottom:1px solid var(--border);color:var(--tx-muted);font-weight:600">${item.label}<br><span style="font-weight:400;font-size:10px">/  ${item.max}</span></th>`).join('');
+      const tbody=previewRows.map(r=>{
+        const scoreCells=config.map(item=>{
+          const v=r.vals[item.id];
+          const ok=v!=null&&v>0;
+          return`<td style="padding:5px 8px;text-align:center;color:${ok?'var(--ok)':'var(--tx-muted)'}">${v!=null?v:'—'}</td>`;
+        }).join('');
+        return`<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:5px 8px"><span style="font-family:monospace;font-size:11px">${r.uid}</span>${r.isNew?'<span style="color:var(--info);font-size:10px;margin-left:4px">ใหม่</span>':''}</td>
+          <td style="padding:5px 8px;font-size:12px">${r.name}</td>
+          ${scoreCells}
+        </tr>`;
+      }).join('');
+      document.getElementById('importPreviewTable').innerHTML=
+        `<thead><tr style="background:var(--surf2)"><th style="padding:5px 8px;border-bottom:1px solid var(--border)">รหัส</th><th style="padding:5px 8px;border-bottom:1px solid var(--border)">ชื่อ</th>${th}</tr></thead><tbody>${tbody}</tbody>`;
+      document.getElementById('importSaveErr').style.display='none';
+      document.getElementById('importSaveBtn').disabled=false;
+      document.getElementById('importSaveBtn').textContent='💾 บันทึกลงฐานข้อมูล';
       res.className='import-result ok';
-      res.textContent=`✅ นำเข้าสำเร็จ: อัปเดต ${updated} คน${skipped?' · ข้ามไป '+skipped+' แถว':''}`;
+      res.textContent=`📋 อ่านข้อมูล ${sbRows.length} คนสำเร็จ — ตรวจสอบด้านล่าง แล้วกดบันทึก`;
       res.style.display='block';
-      if(skipReasons.length) console.log('Import skipped:',skipReasons);
-      showToast(`✅ นำเข้าคะแนน ${updated} คนสำเร็จ`);
-      if(S.selC) selTCourse(S.selC);
+      previewWrap.style.display='block';
     }catch(err){
       res.className='import-result err';
       res.textContent='❌ เกิดข้อผิดพลาด: '+err.message;
@@ -2919,6 +2953,41 @@ async function processImport(file){
     }
   };
   reader.readAsArrayBuffer(file);
+}
+
+async function confirmImportSave(){
+  if(!_importPending) return;
+  const {cid,sbRows,newStudents}=_importPending;
+  const btn=document.getElementById('importSaveBtn');
+  const errDiv=document.getElementById('importSaveErr');
+  btn.disabled=true;
+  btn.textContent='⏳ กำลังบันทึก…';
+  errDiv.style.display='none';
+  try{
+    // Save new students first
+    for(const st of newStudents){
+      await sbUpsertStudent(st);
+    }
+    // Save enrolled courses for all students in the rows
+    const studsToSync=[...new Set(sbRows.map(r=>r.student_id))];
+    for(const sid of studsToSync){
+      const st=S.studs.find(s=>s.id===sid);
+      if(st) await sbUpsertStudent(st);
+    }
+    // Save scores
+    await sbUpsertScoresBulk(sbRows);
+    btn.textContent='✅ บันทึกลงฐานข้อมูลแล้ว';
+    btn.style.background='var(--ok)';
+    showToast(`✅ บันทึกคะแนน ${sbRows.length} คนลงฐานข้อมูลแล้ว`);
+    if(S.selC===cid) selTCourse(cid);
+    _importPending=null;
+  }catch(e){
+    console.error('confirmImportSave error',e);
+    errDiv.textContent='❌ บันทึกไม่สำเร็จ: '+(e?.message||'ไม่ทราบสาเหตุ');
+    errDiv.style.display='block';
+    btn.disabled=false;
+    btn.textContent='💾 ลองบันทึกอีกครั้ง';
+  }
 }
 
 /* ══════════════════════════════════════
