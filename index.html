@@ -882,43 +882,6 @@ tbody tr:hover td{background:var(--surf2)}
         </div>
       </div>
 
-      <!-- REGISTER FORM -->
-      <div class="reg-form" id="regForm">
-        <div class="frow">
-          <div class="fg">
-            <label class="flabel">คำนำหน้า</label>
-            <select class="finput" id="rPrefix">
-              <option value="นาย">นาย</option>
-              <option value="นางสาว" selected>นางสาว</option>
-              <option value="นาง">นาง</option>
-            </select>
-          </div>
-          <div class="fg">
-            <label class="flabel">รหัสนิสิต</label>
-            <input class="finput" id="rUid" type="text" placeholder="เช่น 67100999">
-          </div>
-        </div>
-        <div class="fg">
-          <label class="flabel">ชื่อ-นามสกุล</label>
-          <input class="finput" id="rName" type="text" placeholder="ชื่อ นามสกุล">
-        </div>
-        <div class="frow">
-          <div class="fg">
-            <label class="flabel">รหัสผ่าน</label>
-            <input class="finput" id="rPw" type="password" placeholder="ตั้งรหัสผ่าน">
-          </div>
-          <div class="fg">
-            <label class="flabel">ยืนยันรหัสผ่าน</label>
-            <input class="finput" id="rPw2" type="password" placeholder="ยืนยัน">
-          </div>
-        </div>
-        <div class="lerr" id="rerr"></div>
-        <div class="lok" id="rok"></div>
-        <button class="btnlogin" onclick="doRegister()">
-          <span>สมัครสมาชิก</span>
-          <span class="btn-arrow">→</span>
-        </button>
-      </div>
 
     </div>
   </div>
@@ -1776,21 +1739,13 @@ function showLoginForm(){
   document.getElementById('loginForm').classList.remove('hide');
   document.getElementById('regForm').classList.remove('on');
   document.getElementById('lbtnLogin').classList.add('active');
-  document.getElementById('lbtnReg').classList.remove('active');
   document.getElementById('lformTitle').textContent='เข้าสู่ระบบ';
   document.getElementById('lformSub').textContent='ระบบแจ้งคะแนน สำหรับอาจารย์และนิสิต';
   document.getElementById('lerr').style.display='none';
 }
 
 function showRegForm(){
-  role='register';
-  document.getElementById('loginForm').classList.add('hide');
-  document.getElementById('regForm').classList.add('on');
-  document.getElementById('lbtnReg').classList.add('active');
-  document.getElementById('lbtnLogin').classList.remove('active');
-  document.getElementById('lformTitle').textContent='สมัครสมาชิก';
-  document.getElementById('lformSub').textContent='สร้างบัญชีนิสิตใหม่';
-  ['rerr','rok'].forEach(id=>document.getElementById(id).style.display='none');
+  // ปิดการสมัครสมาชิก — ไม่มีปุ่มนี้แล้ว
 }
 
 /* Unified auto-detect login: admin → teachers → students */
