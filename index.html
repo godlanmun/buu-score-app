@@ -949,6 +949,7 @@ tbody tr:hover td{background:var(--surf2)}
       </div>
       <div class="navuser">
         <div class="navname"><div id="sName">—</div><div class="navrole">นิสิต</div></div>
+        <button class="btnout" onclick="openChangePass()" style="background:rgba(255,255,255,.08);margin-right:4px" title="เปลี่ยนรหัสผ่าน">🔑</button>
         <button class="btnout" onclick="logout()">ออก</button>
       </div>
     </div>
@@ -1264,6 +1265,26 @@ tbody tr:hover td{background:var(--surf2)}
 </div>
 
 <!-- ENROLL MODAL -->
+<!-- CHANGE PASSWORD MODAL (Student) -->
+<div class="mover" id="changePwMover">
+  <div class="modal" style="max-width:400px">
+    <div class="mhead">
+      <div><h3>🔑 เปลี่ยนรหัสผ่าน</h3><p>เพื่อความเป็นส่วนตัวของคุณ</p></div>
+      <button class="mcls" onclick="closeChangePass()">✕</button>
+    </div>
+    <div class="mbody">
+      <div class="fg"><label class="flabel">รหัสผ่านปัจจุบัน</label><input class="finput" id="cpOld" type="password" placeholder="กรอกรหัสผ่านเดิม" autocomplete="current-password"></div>
+      <div class="fg"><label class="flabel">รหัสผ่านใหม่</label><input class="finput" id="cpNew" type="password" placeholder="รหัสผ่านใหม่ (อย่างน้อย 4 ตัวอักษร)" autocomplete="new-password"></div>
+      <div class="fg"><label class="flabel">ยืนยันรหัสผ่านใหม่</label><input class="finput" id="cpNew2" type="password" placeholder="กรอกรหัสผ่านใหม่อีกครั้ง" autocomplete="new-password"></div>
+      <div id="cpErr" style="display:none;color:var(--err);font-size:13px;margin-top:4px;padding:8px 12px;background:var(--err-bg);border-radius:8px"></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn-sec" onclick="closeChangePass()">ยกเลิก</button>
+      <button class="btn-pri" onclick="saveChangePass()">บันทึกรหัสผ่าน</button>
+    </div>
+  </div>
+</div>
+
 <div class="mover" id="enrollMover">
   <div class="modal wide">
     <div class="mhead">
@@ -1342,6 +1363,25 @@ tbody tr:hover td{background:var(--surf2)}
     <div class="mfoot">
       <button class="btn-sec" onclick="closeEditMember()">ยกเลิก</button>
       <button class="btn-pri" onclick="saveEditMember()">บันทึกการแก้ไข</button>
+    </div>
+  </div>
+</div>
+
+<!-- TEACHER RESET STUDENT PASSWORD MODAL -->
+<div class="mover" id="tResetPwMover">
+  <div class="modal" style="max-width:400px">
+    <div class="mhead">
+      <div><h3>🔑 ตั้งรหัสผ่านนิสิต</h3><p id="tResetPwTitle">—</p></div>
+      <button class="mcls" onclick="closeTResetPw()">✕</button>
+    </div>
+    <div class="mbody">
+      <div class="fg"><label class="flabel">รหัสผ่านใหม่</label><input class="finput" id="tRpNew" type="password" placeholder="รหัสผ่านใหม่สำหรับนิสิต" autocomplete="new-password"></div>
+      <div class="fg"><label class="flabel">ยืนยันรหัสผ่าน</label><input class="finput" id="tRpNew2" type="password" placeholder="กรอกอีกครั้ง" autocomplete="new-password"></div>
+      <div id="tRpErr" style="display:none;color:var(--err);font-size:13px;margin-top:4px;padding:8px 12px;background:var(--err-bg);border-radius:8px"></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn-sec" onclick="closeTResetPw()">ยกเลิก</button>
+      <button class="btn-pri" onclick="saveTResetPw()">ตั้งรหัสผ่าน</button>
     </div>
   </div>
 </div>
@@ -1960,6 +2000,33 @@ function bar(label,sub,val,max,cls){
   </div>`;
 }
 
+/* ── CHANGE PASSWORD (Student) ── */
+function openChangePass(){
+  document.getElementById('cpOld').value='';
+  document.getElementById('cpNew').value='';
+  document.getElementById('cpNew2').value='';
+  document.getElementById('cpErr').style.display='none';
+  document.getElementById('changePwMover').classList.add('on');
+  setTimeout(()=>document.getElementById('cpOld').focus(),80);
+}
+function closeChangePass(){document.getElementById('changePwMover').classList.remove('on');}
+async function saveChangePass(){
+  const u=S.user;
+  const oldPw=document.getElementById('cpOld').value;
+  const newPw=document.getElementById('cpNew').value;
+  const newPw2=document.getElementById('cpNew2').value;
+  const err=document.getElementById('cpErr');
+  err.style.display='none';
+  if(oldPw!==u.pw){err.textContent='รหัสผ่านปัจจุบันไม่ถูกต้อง';err.style.display='block';return;}
+  if(!newPw||newPw.length<4){err.textContent='รหัสผ่านใหม่ต้องมีอย่างน้อย 4 ตัวอักษร';err.style.display='block';return;}
+  if(newPw!==newPw2){err.textContent='รหัสผ่านใหม่ไม่ตรงกัน';err.style.display='block';return;}
+  u.pw=newPw;
+  save();
+  try{ await sbUpsertStudent(u); } catch(e){ console.error('changePass error',e); }
+  closeChangePass();
+  showToast('✅ เปลี่ยนรหัสผ่านแล้ว');
+}
+
 /* Enroll modal */
 function openEnrollModal(){
   const u=S.user;
@@ -2409,6 +2476,7 @@ function renderMembers(){
       <td class="r" style="white-space:nowrap">
         <button class="btnedit" onclick="openEditMember('${s.id}')" style="margin-right:4px">✏️ แก้ไข</button>
         <button class="btnedit" onclick="openMgCourses('${s.id}')" style="margin-right:4px">จัดการวิชา</button>
+        <button class="btnedit" onclick="openTResetPw('${s.id}')" style="margin-right:4px" title="ตั้งรหัสผ่าน">🔑</button>
         <button class="btndel" onclick="deleteMember('${s.id}')">ลบ</button>
       </td>
     </tr>`;
@@ -2607,6 +2675,36 @@ async function saveEditMember(){
   closeEditMember();
   renderMembers();
   showToast('✅ แก้ไขข้อมูลสมาชิกแล้ว');
+}
+
+/* ── TEACHER RESET STUDENT PASSWORD ── */
+let _tResetPwSid=null;
+function openTResetPw(sid){
+  const s=S.studs.find(x=>x.id===sid);
+  if(!s) return;
+  _tResetPwSid=sid;
+  document.getElementById('tResetPwTitle').textContent=`${s.name} (${s.uid})`;
+  document.getElementById('tRpNew').value='';
+  document.getElementById('tRpNew2').value='';
+  document.getElementById('tRpErr').style.display='none';
+  document.getElementById('tResetPwMover').classList.add('on');
+  setTimeout(()=>document.getElementById('tRpNew').focus(),80);
+}
+function closeTResetPw(){document.getElementById('tResetPwMover').classList.remove('on');_tResetPwSid=null;}
+async function saveTResetPw(){
+  const s=S.studs.find(x=>x.id===_tResetPwSid);
+  if(!s) return;
+  const np=document.getElementById('tRpNew').value;
+  const np2=document.getElementById('tRpNew2').value;
+  const err=document.getElementById('tRpErr');
+  err.style.display='none';
+  if(!np||np.length<4){err.textContent='รหัสผ่านต้องมีอย่างน้อย 4 ตัวอักษร';err.style.display='block';return;}
+  if(np!==np2){err.textContent='รหัสผ่านไม่ตรงกัน';err.style.display='block';return;}
+  s.pw=np;
+  save();
+  try{ await sbUpsertStudent(s); } catch(e){ console.error('tResetPw error',e); }
+  closeTResetPw();
+  showToast(`✅ ตั้งรหัสผ่านของ ${s.name} แล้ว`);
 }
 
 /* ══════════════════════════════════════
