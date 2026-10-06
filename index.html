@@ -1518,6 +1518,13 @@ async function loadData(){
       S.courses=(cr.data||[]).map(c=>({id:c.id,code:c.code,name:c.name,nameT:c.name_t||'',
         credits:c.credits,group:c.grp,year:c.year,tid:c.tid,
         scoreConfig:Array.isArray(c.score_config)&&c.score_config.length?c.score_config:undefined}));
+      // Merge scoreConfig from localStorage as fallback (in case Supabase column missing)
+      try{
+        const lsd=JSON.parse(localStorage.getItem(LS_DATA)||'null');
+        if(lsd&&lsd.courses) S.courses.forEach(c=>{
+          if(!c.scoreConfig){const lc=lsd.courses.find(x=>x.id===c.id);if(lc&&lc.scoreConfig)c.scoreConfig=lc.scoreConfig;}
+        });
+      }catch(e){}
       S.studs=(sr.data||[]).map(s=>({id:s.id,uid:s.uid,name:s.name,pw:s.pw,cids:s.cids||[]}));
       S.scores={};
       (scr.data||[]).forEach(r=>{S.scores[`${r.student_id}_${r.course_id}`]={col:r.col,mid:r.mid,fin:r.fin,aff:r.aff};});
