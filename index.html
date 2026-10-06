@@ -1516,7 +1516,8 @@ async function loadData(){
       if(tr.error||cr.error||sr.error||scr.error) throw new Error('query error');
       S.teachers=(tr.data||[]).map(t=>({id:t.id,uid:t.uid,name:t.name,pw:t.pw,cids:t.cids||[]}));
       S.courses=(cr.data||[]).map(c=>({id:c.id,code:c.code,name:c.name,nameT:c.name_t||'',
-        credits:c.credits,group:c.grp,year:c.year,tid:c.tid}));
+        credits:c.credits,group:c.grp,year:c.year,tid:c.tid,
+        scoreConfig:Array.isArray(c.score_config)&&c.score_config.length?c.score_config:undefined}));
       S.studs=(sr.data||[]).map(s=>({id:s.id,uid:s.uid,name:s.name,pw:s.pw,cids:s.cids||[]}));
       S.scores={};
       (scr.data||[]).forEach(r=>{S.scores[`${r.student_id}_${r.course_id}`]={col:r.col,mid:r.mid,fin:r.fin,aff:r.aff};});
@@ -1601,8 +1602,10 @@ async function sbDeleteStudent(id){
 }
 async function sbUpsertCourse(c){
   if(!useSupabase) return;
-  await SB.from('score_courses').upsert({id:c.id,code:c.code,name:c.name,name_t:c.nameT||'',
-    credits:c.credits,grp:c.group,year:c.year,tid:c.tid},{onConflict:'id'});
+  const {error}=await SB.from('score_courses').upsert({id:c.id,code:c.code,name:c.name,name_t:c.nameT||'',
+    credits:c.credits,grp:c.group,year:c.year,tid:c.tid,
+    score_config:c.scoreConfig&&c.scoreConfig.length?c.scoreConfig:null},{onConflict:'id'});
+  if(error) throw error;
 }
 async function sbUpsertScore(sid,cid,sc){
   if(!useSupabase) return;
@@ -2293,7 +2296,7 @@ async function addCourse(){
   const c={id:nextId(S.courses,'c'),code,name:nameE||nameT,nameT,credits:cred||'3(3-0-6)',group:grp,year:yr,tid:S.user.id,scoreConfig};
   S.courses.push(c);
   save();
-  sbUpsertCourse(c).catch(()=>{});
+  try{ await sbUpsertCourse(c); } catch(e){ showToast('❌ บันทึก Supabase ไม่สำเร็จ: '+(e?.message||e)); }
   togAC();
   ['nc_code','nc_cred','nc_name','nc_nameE','nc_grp','nc_yr'].forEach(i=>{const el=document.getElementById(i);if(el)el.value='';});
   renderTCourses(S.user);
@@ -2565,7 +2568,7 @@ async function saveEditCourse(){
   if(cfgTotal!==100){showToast('⚠️ คะแนนรวมต้องเท่ากับ 100 (ปัจจุบัน '+cfgTotal+')');return;}
   c.code=code; c.credits=cred||c.credits; c.nameT=nameT; c.name=nameE||nameT; c.group=grp; c.year=yr; c.scoreConfig=scoreConfig;
   save();
-  sbUpsertCourse(c).catch(()=>{});
+  try{ await sbUpsertCourse(c); } catch(e){ showToast('❌ บันทึก Supabase ไม่สำเร็จ: '+(e?.message||e)); return; }
   closeEditCourse();
   renderTCourses(S.user);
   showToast('✅ แก้ไขรายวิชาแล้ว');
