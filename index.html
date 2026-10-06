@@ -1421,6 +1421,20 @@ const DEFAULT_SCORE_CONFIG=[
 function getCourseConfig(c){
   return(c&&c.scoreConfig&&c.scoreConfig.length)?c.scoreConfig:DEFAULT_SCORE_CONFIG;
 }
+// DB score_scores table always has fixed columns: col, mid, fin, aff (positional)
+const DB_SCORE_COLS=['col','mid','fin','aff'];
+// Translate in-memory vals (keyed by config item.id like s0/s1/col/mid) → DB row (col/mid/fin/aff)
+function valsToDbRow(vals,config){
+  const row={};
+  config.forEach((item,i)=>{const dc=DB_SCORE_COLS[i];if(dc!==undefined)row[dc]=vals[item.id]??null;});
+  return row;
+}
+// Translate DB row (col/mid/fin/aff) → in-memory vals keyed by config item.id
+function dbRowToVals(row,config){
+  const vals={};
+  config.forEach((item,i)=>{const dc=DB_SCORE_COLS[i];vals[item.id]=dc!==undefined?(row[dc]??null):null;});
+  return vals;
+}
 function initScoreRows(prefix,config){
   config=config||DEFAULT_SCORE_CONFIG;
   const cont=document.getElementById(prefix+'_scrows');
@@ -1948,7 +1962,7 @@ async function selCourse(cid){
         const r=data[0];
         const cfg=getCourseConfig(course);
         const fresh={};
-        cfg.forEach(item=>{ fresh[item.id]=r[item.id]??null; });
+        Object.assign(fresh,dbRowToVals(r,cfg));
         S.scores[key]=fresh;
       } else {
         S.scores[key]=undefined;
@@ -2435,10 +2449,11 @@ async function saveScores(){
   save();
   closeM();
   try{
+    const dbVals=valsToDbRow(vals,config);
     if(editSid){
-      await sbUpsertScore(editSid,editCid,vals);
+      await sbUpsertScore(editSid,editCid,dbVals);
     } else {
-      await sbUpsertScoresBulk(targets.map(s=>({student_id:s.id,course_id:editCid,...vals})));
+      await sbUpsertScoresBulk(targets.map(s=>({student_id:s.id,course_id:editCid,...dbVals})));
     }
     selTCourse(editCid);
     showToast('✅ บันทึกคะแนนแล้ว');
@@ -2916,7 +2931,7 @@ async function processImport(file){
           vals[item.id]=Math.min(item.max,Math.max(0,v));
         });
         S.scores[`${st.id}_${cid}`]=vals;
-        sbRows.push({student_id:st.id,course_id:cid,...vals});
+        sbRows.push({student_id:st.id,course_id:cid,...valsToDbRow(vals,config)});
         previewRows.push({uid:st.uid,name:st.name,vals,isNew,enrolled});
       }
       if(!sbRows.length) throw new Error('ไม่พบข้อมูลนิสิตในไฟล์');
