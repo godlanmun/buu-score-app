@@ -1419,7 +1419,9 @@ const DEFAULT_SCORE_CONFIG=[
   {id:'aff',label:'คะแนนจิตพิสัย',max:10},
 ];
 function getCourseConfig(c){
-  return(c&&c.scoreConfig&&c.scoreConfig.length)?c.scoreConfig:DEFAULT_SCORE_CONFIG;
+  const cfg=(c&&c.scoreConfig&&c.scoreConfig.length)?c.scoreConfig:DEFAULT_SCORE_CONFIG;
+  // Normalize IDs positionally to DB_SCORE_COLS so s0/s1/s2/s3 never reach the DB
+  return cfg.map((item,i)=>({...item,id:DB_SCORE_COLS[i]||item.id}));
 }
 // DB score_scores table always has fixed columns: col, mid, fin, aff (positional)
 const DB_SCORE_COLS=['col','mid','fin','aff'];
@@ -1480,7 +1482,7 @@ function getScoreConfig(prefix){
     const inputs=row.querySelectorAll('input');
     const label=(inputs[0]?.value||'').trim();
     const max=parseInt(inputs[1]?.value)||0;
-    if(label&&max>0) config.push({id:'s'+i,label,max});
+    if(label&&max>0) config.push({id:DB_SCORE_COLS[i]||'s'+i,label,max});
   });
   return config.length?config:DEFAULT_SCORE_CONFIG;
 }
