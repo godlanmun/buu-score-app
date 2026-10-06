@@ -1945,7 +1945,8 @@ async function selCourse(cid){
     } catch(e){ /* use cached if fetch fails */ }
   }
   const sc=S.scores[key];
-  const hasAnyScore=sc&&Object.values(sc).some(v=>v!==null&&v!==undefined);
+  // ถือว่า "ยังไม่มีคะแนน" ถ้า: ไม่มี row, ทุก field เป็น null, หรือทุก field เป็น 0 (ยังไม่ได้บันทึก)
+  const hasAnyScore=sc&&Object.values(sc).some(v=>v!==null&&v!==undefined&&Number(v)>0);
   if(!sc||!hasAnyScore){
     pan.innerHTML=`<div class="empty"><div class="empty-icon">⏳</div>
       <h3>ยังไม่มีคะแนน</h3><p>อาจารย์ยังไม่ได้บันทึกคะแนนสำหรับวิชานี้</p></div>`;
