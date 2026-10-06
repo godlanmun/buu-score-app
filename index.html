@@ -2330,7 +2330,7 @@ function renderMembers(){
     tb.innerHTML='<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--tx-muted)">ไม่พบสมาชิก</td></tr>';
     // populate bulk course dropdown
     const bc=document.getElementById('bulkCourse');
-    if(bc) bc.innerHTML='<option value="">— เลือกรายวิชา —</option>'+S.courses.map(c=>`<option value="${c.id}">${c.code} – ${c.nameT||c.name}</option>`).join('');
+    if(bc) bc.innerHTML='<option value="">— เลือกรายวิชา —</option>'+S.courses.map(c=>`<option value="${c.id}">${c.code} กลุ่ม ${c.group} – ${c.nameT||c.name}</option>`).join('');
     return;
   }
   tb.innerHTML=list.map(s=>{
@@ -2352,7 +2352,7 @@ function renderMembers(){
   }).join('');
   // populate bulk course dropdown
   const bc=document.getElementById('bulkCourse');
-  if(bc) bc.innerHTML='<option value="">— เลือกรายวิชา —</option>'+S.courses.map(c=>`<option value="${c.id}">${c.code} – ${c.nameT||c.name}</option>`).join('');
+  if(bc) bc.innerHTML='<option value="">— เลือกรายวิชา —</option>'+S.courses.map(c=>`<option value="${c.id}">${c.code} กลุ่ม ${c.group} – ${c.nameT||c.name}</option>`).join('');
   // reset select-all checkbox
   const sa=document.getElementById('selectAllMembers');
   if(sa) sa.checked=false;
@@ -2550,7 +2550,7 @@ async function saveEditMember(){
    EXCEL EXPORT / IMPORT
 ══════════════════════════════════════ */
 function renderExcelPanel(){
-  const opts=S.courses.map(c=>`<option value="${c.id}">${c.code} – ${c.nameT||c.name}</option>`).join('');
+  const opts=S.courses.map(c=>`<option value="${c.id}">${c.code} กลุ่ม ${c.group} – ${c.nameT||c.name}</option>`).join('');
   document.getElementById('exportCourse').innerHTML=opts;
   document.getElementById('importCourse').innerHTML=opts;
 }
