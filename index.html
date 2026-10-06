@@ -1801,7 +1801,8 @@ document.addEventListener('keydown',e=>{
 function showStudent(u){
   document.getElementById('loginView').style.display='none';document.getElementById('loginFooter').style.display='none';
   document.getElementById('appS').classList.add('on');
-  document.getElementById('sName').textContent=u.name||u.uid||'นิสิต';
+  const parts=u.name.split(' ');
+  document.getElementById('sName').textContent=u.name;
   renderSCourses(u);
 }
 function renderSCourses(u){
@@ -1825,7 +1826,7 @@ function renderSCourses(u){
     </div>`).join('');
   selCourse(my[0].id);
 }
-async function selCourse(cid){
+function selCourse(cid){
   S.selC=cid;
   document.querySelectorAll('#sCgrid .ccard').forEach(c=>c.classList.remove('on'));
   const card=document.getElementById('sc_'+cid);
@@ -1833,33 +1834,15 @@ async function selCourse(cid){
   const course=S.courses.find(c=>c.id===cid);
   const u=S.user;
   const key=`${u.id}_${cid}`;
+  const sc=S.scores[key];
   const pan=document.getElementById('spanel');
   pan.classList.add('on');
-  pan.innerHTML=`<div class="empty"><div class="empty-icon">⏳</div><h3>กำลังโหลดคะแนน...</h3></div>`;
-  // Always fetch fresh score from Supabase so student sees latest teacher updates
-  if(useSupabase && u.id){
-    try{
-      const {data}=await SB.from('score_scores').select('*').eq('student_id',u.id).eq('course_id',cid);
-      if(data && data.length){
-        const r=data[0];
-        const cfg=getCourseConfig(course);
-        const fresh={};
-        cfg.forEach(item=>{ fresh[item.id]=r[item.id]??null; });
-        S.scores[key]=fresh;
-      } else {
-        S.scores[key]=undefined;
-      }
-    } catch(e){ /* use cached if fetch fails */ }
-  }
-  const sc=S.scores[key];
   if(!sc){
     pan.innerHTML=`<div class="empty"><div class="empty-icon">⏳</div>
       <h3>ยังไม่มีคะแนน</h3><p>อาจารย์ยังไม่ได้บันทึกคะแนนสำหรับวิชานี้</p></div>`;
     return;
   }
-  const config=getCourseConfig(course);
-  const colTotal=config.reduce((s,x)=>s+x.max,0);
-  const total=config.reduce((sum,item)=>sum+(sc[item.id]??0),0);
+  const total=sc.col+sc.mid+sc.fin+sc.aff;
   const g=grade(total);
   const gColor=gcol(g);
   pan.innerHTML=`
@@ -1874,32 +1857,34 @@ async function selCourse(cid){
       <div class="stotal">
         <div class="stlabel">คะแนนรวม</div>
         <div class="stnum">${total}</div>
-        <div class="stmax">/ ${colTotal}</div>
+        <div class="stmax">/ 100</div>
         <div class="stgrade">${g}</div>
       </div>
       <div class="sdetail">
         <div class="sdr"><span class="sdl">เกรดเฉลี่ย (GP)</span><span class="sdv" style="color:${gColor}">${gp(g)}</span></div>
         <div class="sdr"><span class="sdl">สถานะ</span>
-          <span class="badge ${total>=colTotal*0.5?'ok':'err'}">${total>=colTotal*0.5?'✓ ผ่าน':'✗ ไม่ผ่าน'}</span></div>
-        <div class="sdr"><span class="sdl">คะแนนรวม</span><span class="sdv">${total} / ${colTotal}</span></div>
+          <span class="badge ${total>=50?'ok':'err'}">${total>=50?'✓ ผ่าน':'✗ ไม่ผ่าน'}</span></div>
+        <div class="sdr"><span class="sdl">คะแนนรวม</span><span class="sdv">${total} / 100</span></div>
         <div class="sdr"><span class="sdl">เกรด</span>
           <span class="sdv" style="font-size:18px;color:${gColor}">${g}</span></div>
       </div>
     </div>
     <div class="sbgrid">
-      ${config.map(item=>bar(item.label,'',sc[item.id]??0,item.max,item.id)).join('')}
+      ${bar('คะแนนเก็บ','สะสมระหว่างเรียน',sc.col,30,'col')}
+      ${bar('คะแนนกลางภาค','Midterm Examination',sc.mid,30,'mid')}
+      ${bar('คะแนนปลายภาค','Final Examination',sc.fin,30,'fin')}
+      ${bar('คะแนนจิตพิสัย','Affective Domain',sc.aff,10,'aff')}
     </div>`;
   setTimeout(()=>{
     pan.querySelectorAll('.bfill').forEach(el=>{el.style.width=el.dataset.pct+'%';});
   },40);
 }
 function bar(label,sub,val,max,cls){
-  const v=val??0;
-  const pct=Math.round(v/max*100);
+  const pct=Math.round(val/max*100);
   return`<div class="sbc">
     <div class="bhead">
-      <div><div class="blabel">${label}</div><div class="bsub">${sub||''}</div></div>
-      <div><div class="bval">${v}</div><div class="bmax">/ ${max}</div></div>
+      <div><div class="blabel">${label}</div><div class="bsub">${sub}</div></div>
+      <div><div class="bval">${val}</div><div class="bmax">/ ${max}</div></div>
     </div>
     <div class="btrack"><div class="bfill ${cls}" data-pct="${pct}" style="width:0%"></div></div>
     <div class="bpct">${pct}%</div>
@@ -2330,7 +2315,7 @@ function renderMembers(){
     tb.innerHTML='<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--tx-muted)">ไม่พบสมาชิก</td></tr>';
     // populate bulk course dropdown
     const bc=document.getElementById('bulkCourse');
-    if(bc) bc.innerHTML='<option value="">— เลือกรายวิชา —</option>'+S.courses.map(c=>`<option value="${c.id}">${c.code} กลุ่ม ${c.group} – ${c.nameT||c.name}</option>`).join('');
+    if(bc) bc.innerHTML='<option value="">— เลือกรายวิชา —</option>'+S.courses.map(c=>`<option value="${c.id}">${c.code} – ${c.nameT||c.name}</option>`).join('');
     return;
   }
   tb.innerHTML=list.map(s=>{
@@ -2352,7 +2337,7 @@ function renderMembers(){
   }).join('');
   // populate bulk course dropdown
   const bc=document.getElementById('bulkCourse');
-  if(bc) bc.innerHTML='<option value="">— เลือกรายวิชา —</option>'+S.courses.map(c=>`<option value="${c.id}">${c.code} กลุ่ม ${c.group} – ${c.nameT||c.name}</option>`).join('');
+  if(bc) bc.innerHTML='<option value="">— เลือกรายวิชา —</option>'+S.courses.map(c=>`<option value="${c.id}">${c.code} – ${c.nameT||c.name}</option>`).join('');
   // reset select-all checkbox
   const sa=document.getElementById('selectAllMembers');
   if(sa) sa.checked=false;
@@ -2550,7 +2535,7 @@ async function saveEditMember(){
    EXCEL EXPORT / IMPORT
 ══════════════════════════════════════ */
 function renderExcelPanel(){
-  const opts=S.courses.map(c=>`<option value="${c.id}">${c.code} กลุ่ม ${c.group} – ${c.nameT||c.name}</option>`).join('');
+  const opts=S.courses.map(c=>`<option value="${c.id}">${c.code} – ${c.nameT||c.name}</option>`).join('');
   document.getElementById('exportCourse').innerHTML=opts;
   document.getElementById('importCourse').innerHTML=opts;
 }
