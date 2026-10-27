@@ -1746,8 +1746,8 @@ let role='student'; // kept for doRegister setTimeout backward compat
 function showLoginForm(){
   role='student';
   document.getElementById('loginForm').classList.remove('hide');
-  document.getElementById('regForm').classList.remove('on');
-  document.getElementById('lbtnLogin').classList.add('active');
+  // regForm removed
+  // lbtnLogin removed
   document.getElementById('lformTitle').textContent='เข้าสู่ระบบ';
   document.getElementById('lformSub').textContent='ระบบแจ้งคะแนน สำหรับอาจารย์และนิสิต';
   document.getElementById('lerr').style.display='none';
@@ -1839,8 +1839,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Enter'){
     const lv=document.getElementById('loginView');
     if(lv.style.display!=='none'){
-      const regVisible=document.getElementById('regForm').classList.contains('on');
-      if(regVisible) doRegister(); else doLogin();
+      doLogin();
     }
   }
 });
