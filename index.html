@@ -2605,7 +2605,7 @@ function openMgCourses(sid){
       <input type="checkbox" ${(st.cids||[]).includes(c.id)?'checked':''}
              onclick="toggleMgCourse('${c.id}',this.closest('.clist-item'))">
       <div><div class="clist-name">${c.nameT||c.name}</div>
-        <div class="clist-code">${c.code} · ${c.credits}</div></div>
+        <div class="clist-code">${c.code} · ${c.credits}${c.group?' · กลุ่ม '+c.group:''}</div></div>
     </div>`).join('');
   document.getElementById('mgCoursesMover').classList.add('on');
 }
