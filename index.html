@@ -1399,12 +1399,13 @@ function getCourseConfig(c){
 const DB_SCORE_COLS=['col','mid','fin','aff'];
 // Translate in-memory vals (keyed by config item.id like s0/s1/col/mid) → DB row (col/mid/fin/aff)
 function valsToDbRow(vals,config){
-  const row={};
+  const row={scores_data:vals};
   config.forEach((item,i)=>{const dc=DB_SCORE_COLS[i];if(dc!==undefined)row[dc]=vals[item.id]??null;});
   return row;
 }
 // Translate DB row (col/mid/fin/aff) → in-memory vals keyed by config item.id
 function dbRowToVals(row,config){
+  if(row.scores_data) return {...row.scores_data};
   const vals={};
   config.forEach((item,i)=>{const dc=DB_SCORE_COLS[i];vals[item.id]=dc!==undefined?(row[dc]??null):null;});
   return vals;
@@ -1566,7 +1567,7 @@ async function loadData(){
       }catch(e){}
       S.studs=(sr.data||[]).map(s=>({id:s.id,uid:s.uid,name:s.name,pw:s.pw,cids:s.cids||[]}));
       S.scores={};
-      (scr.data||[]).forEach(r=>{S.scores[`${r.student_id}_${r.course_id}`]={col:r.col,mid:r.mid,fin:r.fin,aff:r.aff};});
+      (scr.data||[]).forEach(r=>{S.scores[`${r.student_id}_${r.course_id}`]=r.scores_data||{col:r.col,mid:r.mid,fin:r.fin,aff:r.aff};});
       // DB is empty on first run — admin will add teachers/courses/students via the admin panel
     }catch(e){
       console.warn('Supabase load failed, falling back to localStorage',e);
