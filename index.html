@@ -1164,6 +1164,20 @@ tbody tr:hover td{background:var(--surf2)}
 
   <!-- Students tab -->
   <div class="admin-content" id="adminC_students">
+    <div class="admin-add-form">
+      <div class="admin-section-title">➕ เพิ่มนิสิตใหม่</div>
+      <div class="admin-form-grid">
+        <select class="admin-input" id="aNewSPrefix">
+          <option value="นาย">นาย</option>
+          <option value="นางสาว">นางสาว</option>
+          <option value="นาง">นาง</option>
+        </select>
+        <input class="admin-input" id="aNewSName" placeholder="ชื่อ-นามสกุล">
+        <input class="admin-input" id="aNewSUid" placeholder="รหัสนิสิต">
+        <input class="admin-input" id="aNewSPw" placeholder="รหัสผ่าน (ค่าเริ่มต้น = รหัสนิสิต)">
+      </div>
+      <button class="admin-btn-sm primary" onclick="adminAddStudent()">✅ เพิ่มนิสิต</button>
+    </div>
     <div class="admin-section-title">นิสิตทั้งหมด</div>
     <input class="admin-input admin-search" id="aStudSearch" placeholder="🔍 ค้นหาชื่อ / รหัสนิสิต…" oninput="renderAdminStudents()">
     <div class="admin-table-wrap">
@@ -2152,6 +2166,26 @@ function renderAdminCourses(){
       <td>${S.studs.filter(s=>(s.cids||[]).includes(c.id)).length} คน</td>
       <td><button class="admin-btn-sm danger" onclick="adminDelCourse('${c.id}')">🗑 ลบ</button></td>
     </tr>`).join('');
+}
+async function adminAddStudent(){
+  const prefix=document.getElementById('aNewSPrefix').value;
+  const rawName=document.getElementById('aNewSName').value.trim();
+  const uid=document.getElementById('aNewSUid').value.trim();
+  const pw=(document.getElementById('aNewSPw').value.trim())||uid;
+  if(!rawName){showToast('❗ กรุณากรอกชื่อ-นามสกุล');return;}
+  if(!uid){showToast('❗ กรุณากรอกรหัสนิสิต');return;}
+  if(S.studs.find(s=>s.uid===uid)||S.teachers.find(t=>t.uid===uid)){
+    showToast('❗ รหัสนิสิตนี้มีในระบบแล้ว');return;
+  }
+  const name=prefix+' '+rawName;
+  const newS={id:nextId(S.studs,'s'),uid,name,pw,cids:[]};
+  S.studs.push(newS);
+  save();
+  sbUpsertStudent(newS).catch(()=>{});
+  ['aNewSName','aNewSUid','aNewSPw'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('aNewSPrefix').selectedIndex=0;
+  renderAdminStudents();
+  showToast('✅ เพิ่มนิสิต '+name+' แล้ว');
 }
 async function adminAddCourse(){
   const name=document.getElementById('aNewCName').value.trim();
